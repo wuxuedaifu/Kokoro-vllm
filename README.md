@@ -23,13 +23,7 @@ A CLI text-to-speech tool using the Kokoro model, supporting multiple languages,
 
 ## Prerequisites
 
-- Python 3.x
-- Required Python packages:
-  - soundfile
-  - sounddevice
-  - kokoro-onnx[gpu]
-  - ebooklib
-  - beautifulsoup4
+- Python 3.12
 
 ## Installation
 
@@ -41,7 +35,11 @@ cd kokoro-tts
 
 2. Install required packages:
 ```bash
-pip install soundfile sounddevice "kokoro-onnx[gpu]" ebooklib beautifulsoup4
+pip install -r requirements.txt
+```
+or
+```bash
+uv sync
 ```
 Note: You can also use `uv` as a faster alternative to pip for package installation. (This is a uv project)
 
