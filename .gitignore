@@ -13,6 +13,6 @@ test.*
 book_audio/
 chunks/
 voices.json
-voices.npz
-kokoro-v0_19.onnx
-
+*.npz
+*.bin
+*.onnx

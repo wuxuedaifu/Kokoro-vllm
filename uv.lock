@@ -309,7 +309,7 @@ wheels = [
 
 [[package]]
 name = "kokoro-onnx"
-version = "0.3.5"
+version = "0.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorlog" },
@@ -320,9 +320,9 @@ dependencies = [
     { name = "onnxruntime" },
     { name = "phonemizer-fork" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/12/77/f452ab1deee971bd811644ebbb4392789cf84014a2a428f0762ca6ba0d3e/kokoro_onnx-0.3.5.tar.gz", hash = "sha256:52f82fef14783d567f72265725813bd881fa01c26030f12856e60b21bfa3c447", size = 85232 }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/ac/6f59e07ac47ee8e35774d5fdacbd2e1b83ab727f201bb5f39789e71b2ca0/kokoro_onnx-0.3.6.tar.gz", hash = "sha256:e3c98ac80cf94452d40089d5ad9ba2eebee48187e806d6128d55add1914a7576", size = 85213 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/42/254b1a42b46823ced35e338d9e6ab75fc8f86b2bf6bd0aa06281ad5ce7e4/kokoro_onnx-0.3.5-py3-none-any.whl", hash = "sha256:649d349aeaa9b20d8cbb694b2729e6aef1e45e84ff704f557b665586d9df8379", size = 10142 },
+    { url = "https://files.pythonhosted.org/packages/ea/50/e5db468119fdc4660e52a1085ecd762601ab928585effadc1bc9106b5df8/kokoro_onnx-0.3.6-py3-none-any.whl", hash = "sha256:07e26f81fc9bae1c41a79e070d71e7f919b85fe320756328cd60d43edb3f2e27", size = 10106 },
 ]
 
 [[package]]
@@ -341,7 +341,7 @@ dependencies = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "ebooklib", specifier = ">=0.18" },
-    { name = "kokoro-onnx", specifier = ">=0.3.5" },
+    { name = "kokoro-onnx", specifier = ">=0.3.6" },
     { name = "sounddevice", specifier = ">=0.5.1" },
     { name = "soundfile", specifier = ">=0.13.0" },
 ]

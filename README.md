@@ -45,15 +45,15 @@ Note: You can also use `uv` as a faster alternative to pip for package installat
 
 3. Download the required model files:
 ```bash
-# Download either voices.json or voices.npz (npz is preferred)
-wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.npz
+# Download either voices.json or voices.bin (bin is preferred)
+wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin
 # or
 wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.json
 
 # Download the model
 wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx
 ```
-Note: The script will automatically use voices.npz if present, falling back to voices.json if npz is not available.
+Note: The script will automatically use voices.bin if present, falling back to voices.json if bin is not available.
 
 ## Usage
 
