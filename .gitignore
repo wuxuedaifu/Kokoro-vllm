@@ -6,12 +6,13 @@ dist/
 wheels/
 *.egg-info
 test.*
-# Virtual environments
 .venv
-# Generated audio files
+*.bkp
 *.wav
 *.mp3
 book_audio/
 chunks/
 voices.json
+voices.npz
 kokoro-v0_19.onnx
+
