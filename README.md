@@ -92,6 +92,10 @@ Basic usage:
 # Basic usage with output file
 kokoro-tts input.txt output.wav --speed 1.2 --lang en-us --voice af_sarah
 
+# Read from standard input (stdin)
+echo "Hello World" | kokoro-tts /dev/stdin --stream
+cat input.txt | kokoro-tts /dev/stdin output.wav
+
 # Use voice blending (60-40 mix)
 kokoro-tts input.txt output.wav --voice "af_sarah:60,am_adam:40"
 
@@ -144,6 +148,12 @@ kokoro-tts --help-languages
 - Lists all found chapters and their metadata
 - Helps troubleshoot processing issues
 
+### Input Options
+- Text file input (.txt)
+- EPUB book input (.epub)
+- Standard input (stdin)
+- Supports piping from other programs
+
 ## Contributing
 
 This is a project for personal use. But if you want to contribute, please feel free to submit a Pull Request.
@@ -154,5 +164,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgments
 
-- Kokoro ONNX model developers
-- Contributors to the dependent libraries
+- [Kokoro-ONNX](https://github.com/thewh1teagle/kokoro-onnx)
