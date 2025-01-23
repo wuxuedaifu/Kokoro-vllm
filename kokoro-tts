@@ -923,7 +923,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Ensure the input file exists
-    if not os.path.isfile(input_file):
+    if not os.access(input_file, os.R_OK):
         print(f"Error: The file {input_file} does not exist.")
         sys.exit(1)
     
