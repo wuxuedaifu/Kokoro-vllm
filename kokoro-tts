@@ -924,7 +924,7 @@ if __name__ == "__main__":
 
     # Ensure the input file exists
     if not os.access(input_file, os.R_OK):
-        print(f"Error: The file {input_file} does not exist.")
+        print(f"Error: Cannot read from {input_file}. File may not exist or you may not have permission to read it.")
         sys.exit(1)
     
     # Ensure the output file has a proper extension if specified
