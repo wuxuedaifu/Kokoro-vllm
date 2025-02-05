@@ -58,8 +58,8 @@ Note: The script will automatically use voices.bin if present, falling back to v
 
 | **Category** | **Voices** | **Language Code** |
 | --- | --- | --- |
-| 🇺🇸 👩🦱 | af\_alloy, af\_aoede, af\_bella, af\_heart, af\_jessica, af\_kore, af\_nicole, af\_nova, af\_river, af\_sarah, af\_sky | **en-us** |
-| 🇺🇸 👨🦱 | am\_adam, am\_echo, am\_eric, am\_fenrir, am\_liam, am\_michael, am\_onyx, am\_puck | **en-us** |
+| 🇺🇸 👩 | af\_alloy, af\_aoede, af\_bella, af\_heart, af\_jessica, af\_kore, af\_nicole, af\_nova, af\_river, af\_sarah, af\_sky | **en-us** |
+| 🇺🇸 👨 | am\_adam, am\_echo, am\_eric, am\_fenrir, am\_liam, am\_michael, am\_onyx, am\_puck | **en-us** |
 | 🇬🇧 | bf\_alice, bf\_emma, bf\_isabella, bf\_lily, bm\_daniel, bm\_fable, bm\_george, bm\_lewis | **en-gb** |
 | 🇫🇷 | ff\_siwis | **fr-fr** |
 | 🇮🇹 | if\_sara, im\_nicola | **it** |
