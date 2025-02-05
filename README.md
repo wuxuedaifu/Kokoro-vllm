@@ -7,6 +7,7 @@ A CLI text-to-speech tool using the Kokoro model, supporting multiple languages,
 - Multiple language and voice support
 - Voice blending with customizable weights
 - EPUB and TXT file input support
+- Standard input (stdin) and `|` piping from other programs
 - Streaming audio playback
 - Split output into chapters
 - Adjustable speech speed
