@@ -135,11 +135,7 @@ Examples:
 def print_supported_languages():
     """Print all supported languages from Kokoro."""
     try:
-        # Check for voices.bin first, fallback to voices.json
-        if os.path.exists("voices.bin"):
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.bin")
-        else:
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.json")
+        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
         languages = sorted(kokoro.get_languages())
         print("\nSupported languages:")
         for lang in languages:
@@ -152,11 +148,7 @@ def print_supported_languages():
 def print_supported_voices():
     """Print all supported voices from Kokoro."""
     try:
-        # Check for voices.bin first, fallback to voices.json
-        if os.path.exists("voices.bin"):
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.bin")
-        else:
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.json")
+        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
         voices = sorted(kokoro.get_voices())
         print("\nSupported voices:")
         for idx, voice in enumerate(voices):
@@ -437,11 +429,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
     global stop_spinner
     # Load Kokoro model
     try:
-        # Check for voices.bin first, fallback to voices.json
-        if os.path.exists("voices.bin"):
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.bin")
-        else:
-            kokoro = Kokoro("kokoro-v0_19.onnx", "voices.json")
+        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
 
         # Validate language after loading model
         lang = validate_language(lang, kokoro)
