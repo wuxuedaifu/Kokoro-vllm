@@ -57,7 +57,7 @@ def extract_text_from_epub(epub_file):
             full_text += soup.get_text()
     return full_text
 
-def chunk_text(text, chunk_size=2000):
+def chunk_text(text, chunk_size=400):
     """Split text into chunks at sentence boundaries."""
     sentences = text.replace('\n', ' ').split('.')
     chunks = []
@@ -540,7 +540,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                 if os.path.exists(chapter_dir):
                     info_file = os.path.join(chapter_dir, "info.txt")
                     if os.path.exists(info_file):
-                        chunks = chunk_text(chapter['content'], chunk_size=2000)
+                        chunks = chunk_text(chapter['content'], chunk_size=400)
                         total_chunks = len(chunks)
                         existing_chunks = len([f for f in os.listdir(chapter_dir) 
                                             if f.startswith("chunk_") and f.endswith(f".{format}")])
@@ -560,7 +560,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                     with open(info_file, "w", encoding="utf-8") as f:
                         f.write(f"Title: {chapter['title']}\n")
                 
-                chunks = chunk_text(chapter['content'], chunk_size=2000)
+                chunks = chunk_text(chapter['content'], chunk_size=400)
                 total_chunks = len(chunks)
                 processed_chunks = len([f for f in os.listdir(chapter_dir) 
                                      if f.startswith("chunk_") and f.endswith(f".{format}")])
@@ -613,7 +613,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
             
             for chapter_num, chapter in enumerate(chapters, 1):
                 print(f"\nProcessing: {chapter['title']}")
-                chunks = chunk_text(chapter['content'], chunk_size=2000)
+                chunks = chunk_text(chapter['content'], chunk_size=400)
                 processed_chunks = 0
                 total_chunks = len(chunks)
                 
