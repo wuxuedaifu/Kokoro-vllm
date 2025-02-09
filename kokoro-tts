@@ -18,6 +18,8 @@ from bs4 import BeautifulSoup
 import soundfile as sf
 import sounddevice as sd
 from kokoro_onnx import Kokoro
+import pymupdf4llm
+import fitz
 
 warnings.filterwarnings("ignore", category=UserWarning, module='ebooklib')
 warnings.filterwarnings("ignore", category=FutureWarning, module='ebooklib')
@@ -415,6 +417,184 @@ def extract_chapters_from_epub(epub_file, debug=False):
     
     return chapters
 
+class PdfParser:
+    def __init__(self, pdf_path, debug=False):
+        self.pdf_path = pdf_path
+        self.chapters = []
+        self.debug = debug
+        
+    def get_chapters(self):
+        """
+        Get the chapters from the PDF file.
+        """
+        if self.debug:
+            print("\nDEBUG: Attempting to extract chapters from table of contents...", flush=True)
+        
+        if self.get_chapter_from_toc():
+            if self.debug:
+                print("\nDEBUG: Successfully extracted chapters from table of contents", flush=True)
+                print(f"DEBUG: Found {len(self.chapters)} chapters", flush=True)
+            return self.chapters
+        else:
+            if self.debug:
+                print("\nDEBUG: Table of contents extraction failed, trying markdown conversion...", flush=True)
+            self.chapters = self.get_chapters_from_txt()
+            if self.debug:
+                print(f"\nDEBUG: Markdown conversion complete. Found {len(self.chapters)} chapters", flush=True)
+            return self.chapters
+
+    def get_chapter_from_toc(self):
+        """
+        Get the chapter from the table of contents.
+        Returns True if chapters were found, False otherwise.
+        """
+        if self.debug:
+            print("\n" + "="*50)
+            print("DEBUG: Starting TOC extraction process")
+            print("="*50 + "\n")
+
+        doc = fitz.open(self.pdf_path)
+        toc = doc.get_toc()
+        if len(toc) == 0:
+            if self.debug:
+                print("\n" + "="*50)
+                print("DEBUG: No table of contents found in PDF")
+                print("="*50 + "\n")
+            doc.close()
+            return False
+
+        # Format and print TOC in a hierarchical structure
+        print("\nTable of Contents:")
+        for level, title, page in toc:
+            # Remove extra whitespace and unwanted characters
+            title = title.strip().replace('\u200b', ' ')
+            indent = "  " * (level - 1)  # Indent based on level
+            print(f"{indent}{'•' if level > 1 else '>'} {title} (page {page})")
+        
+        if self.debug:
+            print("\n" + "="*50)
+            print(f"DEBUG: Found {len(toc)} entries in table of contents")
+            print("="*50 + "\n")
+        
+        # Add user confirmation prompt
+        print("\nPress Enter to start processing, or Ctrl+C to cancel...")
+        input()
+        
+        # Get all level 1 chapters and their pages
+        chapter_markers = []
+        for level, title, page in toc:
+            if level == 1:  # Only get main chapters (level 1)
+                chapter_markers.append((title, page))
+        
+        if not chapter_markers:
+            if self.debug:
+                print("\n" + "="*50)
+                print("DEBUG: No level 1 chapters found in table of contents")
+                print("="*50 + "\n")
+            doc.close()
+            return False
+        
+        if self.debug:
+            print("\n" + "="*50)
+            print(f"DEBUG: Found {len(chapter_markers)} level 1 chapters")
+            print("="*50 + "\n")
+            
+        # Process each chapter by reading all pages until the next chapter
+        for i, (title, start_page) in enumerate(chapter_markers):
+            if self.debug:
+                print(f"DEBUG: Processing chapter {i+1}/{len(chapter_markers)}: {title}")
+            
+            # Get the end page (either next chapter's page - 1 or last page of document)
+            end_page = chapter_markers[i + 1][1] - 1 if i < len(chapter_markers) - 1 else doc.page_count
+            
+            # Collect text from all pages in this chapter
+            chapter_text = []
+            for page_num in range(start_page - 1, end_page):  # -1 because pages are 1-based
+                page = doc[page_num]
+                text = page.get_text()
+                chapter_text.append(text)
+            
+            # Combine all pages and add to chapters
+            full_text = '\n'.join(chapter_text)
+            if full_text.strip():  # Only add if there's actual content
+                self.chapters.append({
+                    'title': title.strip().replace('\u200b', ' '),  # Clean up title
+                    'content': full_text,
+                    'order': i + 1
+                })
+                if self.debug:
+                    print(f"DEBUG: Added chapter {i+1} with {len(full_text.split())} words")
+                    
+        doc.close()
+        
+        if self.debug and self.chapters:
+            print("\n" + "="*50)
+            print(f"DEBUG: Successfully extracted {len(self.chapters)} chapters")
+            print(f"DEBUG: Total words: {sum(len(ch['content'].split()) for ch in self.chapters)}")
+            print("="*50 + "\n")
+        
+        return len(self.chapters) > 0
+
+    def get_chapters_from_txt(self):
+        """
+        Extract chapters from PDF by converting to markdown and parsing the text.
+        Returns a list of chapter dictionaries with title, content, and order.
+        """
+        if self.debug:
+            print("\nDEBUG: Starting markdown conversion of PDF...", flush=True)
+        
+        # Removing very short chapters (assuming that they are not chapters, DANGER)
+        MIN_CHAPTER_LENGTH = 50
+
+        try:
+            # Get markdown content
+            md_text = pymupdf4llm.to_markdown(self.pdf_path, show_progress=True)
+            # Remove underscores from markdown text, they are end page indicators
+            md_text = md_text.replace('-', '')
+            
+            # Initialize variables for chapter extraction
+            current_chapter = None
+            current_text = []
+            counter = 0
+            
+            # Process each line
+            for line in md_text.split('\n'):
+                if line.startswith('#'):
+                    # If we found a new chapter, save the previous one
+                    if current_chapter is not None and current_text:
+                        chapter_text = ''.join(current_text)
+                        if len(chapter_text.strip()) > MIN_CHAPTER_LENGTH:
+                            self.chapters.append({
+                                'title': current_chapter,
+                                'content': chapter_text,
+                                'order': counter
+                            })
+                    
+                    # Start new chapter
+                    counter += 1
+                    current_chapter = f"Chapter {counter}_{line.lstrip('#').strip()}"
+                    current_text = []
+                else:
+                    if current_chapter is not None:
+                        current_text.append(line + '\n')
+
+            
+            # Don't forget to save the last chapter
+            if current_chapter is not None and current_text:
+                chapter_text = ''.join(current_text)
+                if len(chapter_text.strip()) > MIN_CHAPTER_LENGTH:
+                    self.chapters.append({
+                        'title': current_chapter,
+                        'content': chapter_text,
+                        'order': counter
+                    })
+            print(self.chapters)
+            return self.chapters
+            
+        except Exception as e:
+            print(f"Error processing PDF: {e}")
+            return self.chapters
+
 def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: float, lang: str) -> tuple[list[float] | None, int | None]:
     """Process a single chunk of text sequentially."""
     try:
@@ -517,6 +697,9 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
             print("Created chapter directories and info files")
             
             # Continue with existing processing code...
+    elif input_file.endswith('.pdf'):
+        parser = PdfParser(input_file, debug=debug)
+        chapters = parser.get_chapters()
     else:
         with open(input_file, 'r', encoding='utf-8') as file:
             text = file.read()

@@ -17,7 +17,12 @@ voices.json
 *.bin
 *.onnx
 
+# macOS
+.DS_Store
+
 # book files
 *.epub
 *.txt
+*.pdf
 !requirements.txt
+
