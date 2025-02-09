@@ -169,7 +169,7 @@ kokoro-tts --help-languages
 
 ## Contributing
 
-This is a project for personal use. But if you want to contribute, please feel free to submit a Pull Request.
+This is a personal project. But if you want to contribute, please feel free to submit a Pull Request.
 
 ## License
 
