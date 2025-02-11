@@ -704,10 +704,13 @@ def merge_chunks_to_chapters(split_output_dir, format="wav"):
     # Find all chapter directories
     chapter_dirs = sorted([d for d in os.listdir(split_output_dir) 
                           if d.startswith("chapter_") and os.path.isdir(os.path.join(split_output_dir, d))])
-    
+
     if not chapter_dirs:
         print(f"No chapter directories found in {split_output_dir}")
         return
+
+    # Track used titles to handle duplicates
+    used_titles = set()
 
     for chapter_dir in chapter_dirs:
         chapter_path = os.path.join(split_output_dir, chapter_dir)
@@ -727,6 +730,16 @@ def merge_chunks_to_chapters(split_output_dir, format="wav"):
                     if line.startswith("Title:"):
                         chapter_title = line.replace("Title:", "").strip()
                         break
+
+        # Clean title for filesystem use
+        safe_title = "".join(c for c in chapter_title if c.isalnum() or c in (' ', '-', '_')).strip()
+        
+        # Handle duplicate or empty titles
+        if not safe_title or safe_title in used_titles:
+            merged_file = os.path.join(split_output_dir, f"{chapter_dir}.{format}")
+        else:
+            merged_file = os.path.join(split_output_dir, f"{safe_title}.{format}")
+            used_titles.add(safe_title)
 
         print(f"\nMerging chunks for {chapter_title}")
         
@@ -775,8 +788,6 @@ def merge_chunks_to_chapters(split_output_dir, format="wav"):
         print()  # New line after progress
         
         if all_samples:
-            # Create merged file name
-            merged_file = os.path.join(split_output_dir, f"{chapter_dir}.{format}")
             print(f"Saving merged chapter to {merged_file}")
             print(f"Total duration: {total_duration:.2f} seconds")
             
