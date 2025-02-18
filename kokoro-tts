@@ -60,12 +60,13 @@ def extract_text_from_epub(epub_file):
             full_text += soup.get_text()
     return full_text
 
-def chunk_text(text, chunk_size=400):
-    """Split text into chunks at sentence boundaries."""
+def chunk_text(text, initial_chunk_size=1000):
+    """Split text into chunks at sentence boundaries with dynamic sizing."""
     sentences = text.replace('\n', ' ').split('.')
     chunks = []
     current_chunk = []
     current_size = 0
+    chunk_size = initial_chunk_size
     
     for sentence in sentences:
         if not sentence.strip():
@@ -73,6 +74,27 @@ def chunk_text(text, chunk_size=400):
         
         sentence = sentence.strip() + '.'
         sentence_size = len(sentence)
+        
+        # If a single sentence is too long, split it into smaller pieces
+        if sentence_size > chunk_size:
+            words = sentence.split()
+            current_piece = []
+            current_piece_size = 0
+            
+            for word in words:
+                word_size = len(word) + 1  # +1 for space
+                if current_piece_size + word_size > chunk_size:
+                    if current_piece:
+                        chunks.append(' '.join(current_piece).strip() + '.')
+                    current_piece = [word]
+                    current_piece_size = word_size
+                else:
+                    current_piece.append(word)
+                    current_piece_size += word_size
+            
+            if current_piece:
+                chunks.append(' '.join(current_piece).strip() + '.')
+            continue
         
         # Start new chunk if current one would be too large
         if current_size + sentence_size > chunk_size and current_chunk:
@@ -648,13 +670,109 @@ class PdfParser:
                 
         return '\n'.join(chapter_text)
 
-def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: float, lang: str) -> tuple[list[float] | None, int | None]:
-    """Process a single chunk of text sequentially."""
+def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: float, lang: str, 
+                           retry_count=0, debug=False) -> tuple[list[float] | None, int | None]:
+    """Process a single chunk of text sequentially with automatic chunk size adjustment."""
     try:
+        if debug:
+            sys.stdout.write("\033[K")  # Clear to end of line
+            sys.stdout.write(f"\nDEBUG: Processing chunk of length {len(chunk)}")
+            if retry_count > 0:
+                sys.stdout.write(f"\nDEBUG: Retry #{retry_count} - Reduced chunk size to {len(chunk)}")
+            sys.stdout.write("\n")  # Move back to progress line
+            sys.stdout.flush()
+        
         samples, sample_rate = kokoro.create(chunk, voice=voice, speed=speed, lang=lang)
         return samples, sample_rate
     except Exception as e:
-        print(f"\nError processing chunk: {e}")
+        error_msg = str(e)
+        if "index 510 is out of bounds" in error_msg:
+            current_size = len(chunk)
+            new_size = int(current_size * 0.6)  # Reduce by 40% to converge faster
+            
+            if debug:
+                sys.stdout.write("\033[K")  # Clear to end of line
+                sys.stdout.write(f"\nDEBUG: Phoneme length error detected on chunk size {current_size}")
+                sys.stdout.write(f"\nDEBUG: Attempting retry with size {new_size}")
+                sys.stdout.write("\n")
+            else:
+                # Show a user-friendly message in non-debug mode
+                sys.stdout.write("\033[K")  # Clear to end of line
+                sys.stdout.write("\rNote: Automatically handling a long text segment...")
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+            
+            # Split this chunk into smaller pieces
+            words = chunk.split()
+            current_piece = []
+            current_size = 0
+            pieces = []
+            
+            for word in words:
+                word_size = len(word) + 1  # +1 for space
+                if current_size + word_size > new_size:
+                    if current_piece:
+                        pieces.append(' '.join(current_piece).strip())
+                    current_piece = [word]
+                    current_size = word_size
+                else:
+                    current_piece.append(word)
+                    current_size += word_size
+            
+            if current_piece:
+                pieces.append(' '.join(current_piece).strip())
+            
+            if debug:
+                sys.stdout.write("\033[K")
+                sys.stdout.write(f"\nDEBUG: Split chunk into {len(pieces)} pieces")
+                for i, piece in enumerate(pieces, 1):
+                    sys.stdout.write(f"\nDEBUG: Piece {i} length: {len(piece)}")
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+            
+            # Process each piece
+            all_samples = []
+            last_sample_rate = None
+            
+            for i, piece in enumerate(pieces, 1):
+                if debug:
+                    sys.stdout.write("\033[K")
+                    sys.stdout.write(f"\nDEBUG: Processing piece {i}/{len(pieces)}")
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                
+                samples, sr = process_chunk_sequential(piece, kokoro, voice, speed, lang, 
+                                                     retry_count + 1, debug)
+                if samples is not None:
+                    all_samples.extend(samples)
+                    last_sample_rate = sr
+            
+            if all_samples:
+                if debug:
+                    sys.stdout.write("\033[K")
+                    sys.stdout.write(f"\nDEBUG: Successfully processed all {len(pieces)} pieces")
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+                return all_samples, last_sample_rate
+            
+            if debug:
+                sys.stdout.write("\033[K")
+                sys.stdout.write(f"\nDEBUG: Failed to process any pieces after splitting")
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+            
+        # Show a more user-friendly error message in non-debug mode
+        if not debug:
+            sys.stdout.write("\033[K")
+            sys.stdout.write(f"\rError: Unable to process text segment. Try using smaller chunks or enable debug mode for details.")
+        else:
+            sys.stdout.write("\033[K")
+            sys.stdout.write(f"\nError processing chunk: {e}")
+            sys.stdout.write(f"\nDEBUG: Full error message: {error_msg}")
+            sys.stdout.write(f"\nDEBUG: Chunk length: {len(chunk)}")
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        
         return None, None
 
 def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, lang="en-us", 
@@ -727,29 +845,29 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
             print("No chapters found in EPUB file.")
             sys.exit(1)
             
-        print("\nPress Enter to start processing, or Ctrl+C to cancel...")
-        input()
-        
-        if split_output:
-            os.makedirs(split_output, exist_ok=True)
+            print("\nPress Enter to start processing, or Ctrl+C to cancel...")
+            input()
             
-            # First create all chapter directories and info files
-            print("\nCreating chapter directories and info files...")
-            for chapter_num, chapter in enumerate(chapters, 1):
-                chapter_dir = os.path.join(split_output, f"chapter_{chapter_num:03d}")
-                os.makedirs(chapter_dir, exist_ok=True)
+            if split_output:
+                os.makedirs(split_output, exist_ok=True)
                 
-                # Write chapter info with more details
-                info_file = os.path.join(chapter_dir, "info.txt")
-                with open(info_file, "w", encoding="utf-8") as f:
-                    f.write(f"Title: {chapter['title']}\n")
-                    f.write(f"Order: {chapter['order']}\n")
-                    f.write(f"Words: {len(chapter['content'].split())}\n")
-                    f.write(f"Estimated Duration: {len(chapter['content'].split()) / 150:.1f} minutes\n")
-            
-            print("Created chapter directories and info files")
-            
-            # Continue with existing processing code...
+                # First create all chapter directories and info files
+                print("\nCreating chapter directories and info files...")
+                for chapter_num, chapter in enumerate(chapters, 1):
+                    chapter_dir = os.path.join(split_output, f"chapter_{chapter_num:03d}")
+                    os.makedirs(chapter_dir, exist_ok=True)
+                    
+                    # Write chapter info with more details
+                    info_file = os.path.join(chapter_dir, "info.txt")
+                    with open(info_file, "w", encoding="utf-8") as f:
+                        f.write(f"Title: {chapter['title']}\n")
+                        f.write(f"Order: {chapter['order']}\n")
+                        f.write(f"Words: {len(chapter['content'].split())}\n")
+                        f.write(f"Estimated Duration: {len(chapter['content'].split()) / 150:.1f} minutes\n")
+                
+                print("Created chapter directories and info files")
+                
+                # Continue with existing processing code...
     elif input_file.endswith('.pdf'):
         parser = PdfParser(input_file, debug=debug)
         chapters = parser.get_chapters()
@@ -764,7 +882,8 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
         # Stream each chapter
         for chapter in chapters:
             print(f"\nStreaming: {chapter['title']}")
-            asyncio.run(stream_audio(kokoro, chapter['content'], voice, speed, lang))
+            chunks = chunk_text(chapter['content'], initial_chunk_size=1000)
+            asyncio.run(stream_audio(kokoro, chapter['content'], voice, speed, lang, debug))
     else:
         if split_output:
             os.makedirs(split_output, exist_ok=True)
@@ -776,7 +895,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                 if os.path.exists(chapter_dir):
                     info_file = os.path.join(chapter_dir, "info.txt")
                     if os.path.exists(info_file):
-                        chunks = chunk_text(chapter['content'], chunk_size=400)
+                        chunks = chunk_text(chapter['content'], initial_chunk_size=1000)
                         total_chunks = len(chunks)
                         existing_chunks = len([f for f in os.listdir(chapter_dir) 
                                             if f.startswith("chunk_") and f.endswith(f".{format}")])
@@ -796,7 +915,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                     with open(info_file, "w", encoding="utf-8") as f:
                         f.write(f"Title: {chapter['title']}\n")
                 
-                chunks = chunk_text(chapter['content'], chunk_size=400)
+                chunks = chunk_text(chapter['content'], initial_chunk_size=1000)
                 total_chunks = len(chunks)
                 processed_chunks = len([f for f in os.listdir(chapter_dir) 
                                      if f.startswith("chunk_") and f.endswith(f".{format}")])
@@ -823,7 +942,10 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                     spinner_thread.start()
                     
                     try:
-                        samples, sample_rate = process_chunk_sequential(chunk, kokoro, voice, speed, lang)
+                        samples, sample_rate = process_chunk_sequential(
+                            chunk, kokoro, voice, speed, lang, 
+                            retry_count=0, debug=debug  # Add retry parameters
+                        )
                         if samples is not None:
                             sf.write(chunk_file, samples, sample_rate)
                             processed_chunks += 1
@@ -849,7 +971,7 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
             
             for chapter_num, chapter in enumerate(chapters, 1):
                 print(f"\nProcessing: {chapter['title']}")
-                chunks = chunk_text(chapter['content'], chunk_size=400)
+                chunks = chunk_text(chapter['content'], initial_chunk_size=1000)
                 processed_chunks = 0
                 total_chunks = len(chunks)
                 
@@ -865,7 +987,10 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                     spinner_thread.start()
                     
                     try:
-                        samples, sr = process_chunk_sequential(chunk, kokoro, voice, speed, lang)
+                        samples, sr = process_chunk_sequential(
+                            chunk, kokoro, voice, speed, lang,
+                            retry_count=0, debug=debug  # Add retry parameters
+                        )
                         if samples is not None:
                             if sample_rate is None:
                                 sample_rate = sr
@@ -886,13 +1011,13 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
                 sf.write(output_file, all_samples, sample_rate)
                 print(f"Created {output_file}")
 
-async def stream_audio(kokoro, text, voice, speed, lang):
+async def stream_audio(kokoro, text, voice, speed, lang, debug=False):
     global stop_spinner, stop_audio
     stop_spinner = False
     stop_audio = False
     
     print("Starting audio stream...")
-    chunks = chunk_text(text)
+    chunks = chunk_text(text, initial_chunk_size=1000)
     
     for i, chunk in enumerate(chunks, 1):
         if stop_audio:
@@ -910,6 +1035,8 @@ async def stream_audio(kokoro, text, voice, speed, lang):
         ):
             if stop_audio:
                 break
+            if debug:
+                print(f"\nDEBUG: Playing chunk of {len(samples)} samples")
             sd.play(samples, sample_rate)
             sd.wait()
         
