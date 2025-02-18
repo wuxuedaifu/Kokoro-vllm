@@ -10,6 +10,7 @@ import signal
 import difflib
 import warnings
 from threading import Event
+import re
 
 # Third-party imports
 import numpy as np
@@ -418,182 +419,234 @@ def extract_chapters_from_epub(epub_file, debug=False):
     return chapters
 
 class PdfParser:
-    def __init__(self, pdf_path, debug=False):
+    """Parser for extracting chapters from PDF files.
+    
+    Attempts to extract chapters first from table of contents,
+    then falls back to markdown-based extraction if TOC fails.
+    """
+    
+    def __init__(self, pdf_path: str, debug: bool = False, min_chapter_length: int = 50):
+        """Initialize PDF parser.
+        
+        Args:
+            pdf_path: Path to PDF file
+            debug: Enable debug logging
+            min_chapter_length: Minimum text length to consider as chapter
+        """
         self.pdf_path = pdf_path
         self.chapters = []
         self.debug = debug
+        self.min_chapter_length = min_chapter_length
         
+        if not os.path.exists(pdf_path):
+            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+
     def get_chapters(self):
-        """
-        Get the chapters from the PDF file.
+        """Extract chapters from PDF file.
+        
+        Returns:
+            List of chapter dictionaries with title, content and order.
         """
         if self.debug:
-            print("\nDEBUG: Attempting to extract chapters from table of contents...", flush=True)
+            print("\nDEBUG: Starting chapter extraction...")
+            print(f"DEBUG: PDF file: {self.pdf_path}")
+            print(f"DEBUG: Min chapter length: {self.min_chapter_length}")
         
-        if self.get_chapter_from_toc():
+        # Try TOC extraction first
+        if self.get_chapters_from_toc():
             if self.debug:
-                print("\nDEBUG: Successfully extracted chapters from table of contents", flush=True)
-                print(f"DEBUG: Found {len(self.chapters)} chapters", flush=True)
+                print(f"\nDEBUG: Successfully extracted {len(self.chapters)} chapters from TOC")
             return self.chapters
-        else:
-            if self.debug:
-                print("\nDEBUG: Table of contents extraction failed, trying markdown conversion...", flush=True)
-            self.chapters = self.get_chapters_from_txt()
-            if self.debug:
-                print(f"\nDEBUG: Markdown conversion complete. Found {len(self.chapters)} chapters", flush=True)
-            return self.chapters
-
-    def get_chapter_from_toc(self):
-        """
-        Get the chapter from the table of contents.
-        Returns True if chapters were found, False otherwise.
-        """
+            
+        # Fall back to markdown extraction
         if self.debug:
-            print("\n" + "="*50)
-            print("DEBUG: Starting TOC extraction process")
-            print("="*50 + "\n")
-
-        doc = fitz.open(self.pdf_path)
-        toc = doc.get_toc()
-        if len(toc) == 0:
-            if self.debug:
-                print("\n" + "="*50)
-                print("DEBUG: No table of contents found in PDF")
-                print("="*50 + "\n")
-            doc.close()
-            return False
-
-        # Format and print TOC in a hierarchical structure
-        print("\nTable of Contents:")
-        for level, title, page in toc:
-            # Remove extra whitespace and unwanted characters
-            title = title.strip().replace('\u200b', ' ')
-            indent = "  " * (level - 1)  # Indent based on level
-            print(f"{indent}{'•' if level > 1 else '>'} {title} (page {page})")
+            print("\nDEBUG: TOC extraction failed, trying markdown conversion...")
+        
+        self.chapters = self.get_chapters_from_markdown()
         
         if self.debug:
-            print("\n" + "="*50)
-            print(f"DEBUG: Found {len(toc)} entries in table of contents")
-            print("="*50 + "\n")
-        
-        # Add user confirmation prompt
-        print("\nPress Enter to start processing, or Ctrl+C to cancel...")
-        input()
-        
-        # Get all level 1 chapters and their pages
-        chapter_markers = []
-        for level, title, page in toc:
-            if level == 1:  # Only get main chapters (level 1)
-                chapter_markers.append((title, page))
-        
-        if not chapter_markers:
-            if self.debug:
-                print("\n" + "="*50)
-                print("DEBUG: No level 1 chapters found in table of contents")
-                print("="*50 + "\n")
-            doc.close()
-            return False
-        
-        if self.debug:
-            print("\n" + "="*50)
-            print(f"DEBUG: Found {len(chapter_markers)} level 1 chapters")
-            print("="*50 + "\n")
+            print(f"\nDEBUG: Markdown extraction complete")
+            print(f"DEBUG: Found {len(self.chapters)} chapters")
             
-        # Process each chapter by reading all pages until the next chapter
-        for i, (title, start_page) in enumerate(chapter_markers):
-            if self.debug:
-                print(f"DEBUG: Processing chapter {i+1}/{len(chapter_markers)}: {title}")
-            
-            # Get the end page (either next chapter's page - 1 or last page of document)
-            end_page = chapter_markers[i + 1][1] - 1 if i < len(chapter_markers) - 1 else doc.page_count
-            
-            # Collect text from all pages in this chapter
-            chapter_text = []
-            for page_num in range(start_page - 1, end_page):  # -1 because pages are 1-based
-                page = doc[page_num]
-                text = page.get_text()
-                chapter_text.append(text)
-            
-            # Combine all pages and add to chapters
-            full_text = '\n'.join(chapter_text)
-            if full_text.strip():  # Only add if there's actual content
-                self.chapters.append({
-                    'title': title.strip().replace('\u200b', ' '),  # Clean up title
-                    'content': full_text,
-                    'order': i + 1
-                })
-                if self.debug:
-                    print(f"DEBUG: Added chapter {i+1} with {len(full_text.split())} words")
-                    
-        doc.close()
-        
-        if self.debug and self.chapters:
-            print("\n" + "="*50)
-            print(f"DEBUG: Successfully extracted {len(self.chapters)} chapters")
-            print(f"DEBUG: Total words: {sum(len(ch['content'].split()) for ch in self.chapters)}")
-            print("="*50 + "\n")
-        
-        return len(self.chapters) > 0
+        return self.chapters
 
-    def get_chapters_from_txt(self):
-        """
-        Extract chapters from PDF by converting to markdown and parsing the text.
-        Returns a list of chapter dictionaries with title, content, and order.
-        """
-        if self.debug:
-            print("\nDEBUG: Starting markdown conversion of PDF...", flush=True)
+    def get_chapters_from_toc(self):
+        """Extract chapters using PDF table of contents.
         
-        # Removing very short chapters (assuming that they are not chapters, DANGER)
-        MIN_CHAPTER_LENGTH = 50
-
+        Returns:
+            bool: True if chapters were found, False otherwise
+        """
+        doc = None
         try:
-            # Get markdown content
-            md_text = pymupdf4llm.to_markdown(self.pdf_path, show_progress=True)
-            # Remove underscores from markdown text, they are end page indicators
-            md_text = md_text.replace('-', '')
+            doc = fitz.open(self.pdf_path)
+            toc = doc.get_toc()
             
-            # Initialize variables for chapter extraction
+            if not toc:
+                if self.debug:
+                    print("\nDEBUG: No table of contents found")
+                return False
+
+            # Print TOC structure
+            print("\nTable of Contents:")
+            for level, title, page in toc:
+                title = self._clean_title(title)
+                indent = "  " * (level - 1)
+                print(f"{indent}{'•' if level > 1 else '>'} {title} (page {page})")
+            
+            if self.debug:
+                print(f"\nDEBUG: Found {len(toc)} TOC entries")
+            
+            # Get user confirmation
+            print("\nPress Enter to start processing, or Ctrl+C to cancel...")
+            input()
+            
+            # Extract level 1 chapters, filtering out empty titles and duplicates
+            seen_pages = set()
+            chapter_markers = []
+            
+            for level, title, page in toc:
+                if level == 1:
+                    title = self._clean_title(title)
+                    # Skip empty titles or titles that start on same page as previous entry
+                    if title and page not in seen_pages:
+                        chapter_markers.append((title, page))
+                        seen_pages.add(page)
+            
+            if not chapter_markers:
+                if self.debug:
+                    print("\nDEBUG: No level 1 chapters found in TOC")
+                return False
+            
+            if self.debug:
+                print(f"\nDEBUG: Found {len(chapter_markers)} chapters:")
+                for title, page in chapter_markers:
+                    print(f"DEBUG: • {title} (page {page})")
+            
+            # Process each chapter
+            for i, (title, start_page) in enumerate(chapter_markers):
+                if self.debug:
+                    print(f"\nDEBUG: Processing chapter {i+1}/{len(chapter_markers)}")
+                    print(f"DEBUG: Title: {title}")
+                    print(f"DEBUG: Start page: {start_page}")
+                
+                # Get chapter end page
+                end_page = (chapter_markers[i + 1][1] - 1 
+                           if i < len(chapter_markers) - 1 
+                           else doc.page_count)
+                
+                # Extract chapter text
+                chapter_text = self._extract_chapter_text(doc, start_page - 1, end_page)
+                
+                if len(chapter_text.strip()) > self.min_chapter_length:
+                    self.chapters.append({
+                        'title': title,
+                        'content': chapter_text,
+                        'order': i + 1
+                    })
+                    if self.debug:
+                        print(f"DEBUG: Added chapter with {len(chapter_text.split())} words")
+            
+            return bool(self.chapters)
+            
+        except Exception as e:
+            if self.debug:
+                print(f"\nDEBUG: Error in TOC extraction: {str(e)}")
+            return False
+            
+        finally:
+            if doc:
+                doc.close()
+
+    def get_chapters_from_markdown(self):
+        """Extract chapters by converting PDF to markdown.
+        
+        Returns:
+            List of chapter dictionaries
+        """
+        chapters = []
+        try:
+            def progress(current, total):
+                if self.debug:
+                    print(f"\rConverting page {current}/{total}...", end="", flush=True)
+            
+            # Convert PDF to markdown
+            md_text = pymupdf4llm.to_markdown(
+                self.pdf_path,
+                show_progress=True,
+                progress_callback=progress
+            )
+            
+            # Clean up markdown text
+            md_text = self._clean_markdown(md_text)
+            
+            # Extract chapters
             current_chapter = None
             current_text = []
-            counter = 0
+            chapter_count = 0
             
-            # Process each line
             for line in md_text.split('\n'):
                 if line.startswith('#'):
-                    # If we found a new chapter, save the previous one
-                    if current_chapter is not None and current_text:
+                    # Save previous chapter if exists
+                    if current_chapter and current_text:
                         chapter_text = ''.join(current_text)
-                        if len(chapter_text.strip()) > MIN_CHAPTER_LENGTH:
-                            self.chapters.append({
+                        if len(chapter_text.strip()) > self.min_chapter_length:
+                            chapters.append({
                                 'title': current_chapter,
                                 'content': chapter_text,
-                                'order': counter
+                                'order': chapter_count
                             })
                     
                     # Start new chapter
-                    counter += 1
-                    current_chapter = f"Chapter {counter}_{line.lstrip('#').strip()}"
+                    chapter_count += 1
+                    current_chapter = f"Chapter {chapter_count}_{line.lstrip('#').strip()}"
                     current_text = []
                 else:
                     if current_chapter is not None:
                         current_text.append(line + '\n')
-
             
-            # Don't forget to save the last chapter
-            if current_chapter is not None and current_text:
+            # Add final chapter
+            if current_chapter and current_text:
                 chapter_text = ''.join(current_text)
-                if len(chapter_text.strip()) > MIN_CHAPTER_LENGTH:
-                    self.chapters.append({
+                if len(chapter_text.strip()) > self.min_chapter_length:
+                    chapters.append({
                         'title': current_chapter,
                         'content': chapter_text,
-                        'order': counter
+                        'order': chapter_count
                     })
-            print(self.chapters)
-            return self.chapters
+            
+            return chapters
             
         except Exception as e:
-            print(f"Error processing PDF: {e}")
-            return self.chapters
+            if self.debug:
+                print(f"\nDEBUG: Error in markdown extraction: {str(e)}")
+            return chapters
+
+    def _clean_title(self, title: str) -> str:
+        """Clean up chapter title text."""
+        return title.strip().replace('\u200b', ' ')
+        
+    def _clean_markdown(self, text: str) -> str:
+        """Clean up converted markdown text."""
+        # Remove page markers
+        text = text.replace('-', '')
+        # Remove other unwanted characters
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+        
+    def _extract_chapter_text(self, doc, start_page: int, end_page: int) -> str:
+        """Extract text from PDF pages."""
+        chapter_text = []
+        for page_num in range(start_page, end_page):
+            try:
+                page = doc[page_num]
+                text = page.get_text()
+                chapter_text.append(text)
+            except Exception as e:
+                if self.debug:
+                    print(f"\nDEBUG: Error extracting page {page_num}: {str(e)}")
+                continue
+                
+        return '\n'.join(chapter_text)
 
 def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: float, lang: str) -> tuple[list[float] | None, int | None]:
     """Process a single chunk of text sequentially."""
