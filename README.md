@@ -1,12 +1,12 @@
 # Kokoro TTS
 
-A CLI text-to-speech tool using the Kokoro model, supporting multiple languages, voices (with blending), and various input formats including EPUB books.
+A CLI text-to-speech tool using the Kokoro model, supporting multiple languages, voices (with blending), and various input formats including EPUB books and PDF documents.
 
 ## Features
 
 - Multiple language and voice support
 - Voice blending with customizable weights
-- EPUB and TXT file input support
+- EPUB, PDF and TXT file input support
 - Standard input (stdin) and `|` piping from other programs
 - Streaming audio playback
 - Split output into chapters
@@ -19,7 +19,7 @@ A CLI text-to-speech tool using the Kokoro model, supporting multiple languages,
 ## TODO
 
 - [x] Add GPU support
-- [ ] Add PDF support
+- [x] Add PDF support
 - [ ] Add GUI
 
 ## Prerequisites
@@ -98,6 +98,7 @@ Basic usage:
 
 - `.txt`: Text file input
 - `.epub`: EPUB book input (will process chapters)
+- `.pdf`: PDF document input (extracts chapters from TOC or content)
 
 ### Examples
 
@@ -127,6 +128,8 @@ kokoro-tts --merge-chunks --split-output ./chunks/ --format wav
 # Process EPUB with detailed debug output
 kokoro-tts input.epub --split-output ./chunks/ --debug
 
+# Process PDF and split into chapters
+kokoro-tts input.pdf --split-output ./chunks/ --format mp3
 # List available voices
 kokoro-tts --help-voices
 

@@ -144,10 +144,13 @@ Options:
 Input formats:
     .txt               Text file input
     .epub              EPUB book input (will process chapters)
+    .pdf               PDF document input (extracts chapters from TOC or content)
 
 Examples:
     kokoro-tts input.txt output.wav --speed 1.2 --lang en-us --voice af_sarah
     kokoro-tts input.epub --split-output ./chunks/ --format mp3
+    kokoro-tts input.pdf output.wav --speed 1.2 --lang en-us --voice af_sarah
+    kokoro-tts input.pdf --split-output ./chunks/ --format mp3
     kokoro-tts input.txt --stream --speed 0.8
     kokoro-tts input.txt output.wav --voice "af_sarah:60,am_adam:40"
     kokoro-tts input.txt --stream --voice "am_adam,af_sarah" # 50-50 blend
