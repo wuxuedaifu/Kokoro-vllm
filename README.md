@@ -43,6 +43,7 @@ or
 uv sync
 ```
 Note: You can also use `uv` as a faster alternative to pip for package installation. (This is a uv project)
+Note: Python>=3.13 is not currently supported.
 
 3. Download the required model files:
 ```bash
