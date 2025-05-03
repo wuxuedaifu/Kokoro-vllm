@@ -22,8 +22,7 @@ A CLI text-to-speech tool using the Kokoro model, supporting multiple languages,
 
 Kokoro TTS is an open-source CLI tool that delivers high-quality text-to-speech right from your terminal. Think of it as your personal voice studio, capable of transforming any text into natural-sounding speech with minimal effort.
 
-<video src="https://github.com/nazdridoy/kokoro-tts/raw/main/previews/demo.mp4" controls="controls" style="max-width: 730px;">
-</video>
+https://github.com/user-attachments/assets/8413e640-59e9-490e-861d-49187e967526
 
 [Demo Audio (MP3)](https://github.com/nazdridoy/kokoro-tts/raw/main/previews/demo.mp3) | [Demo Audio (WAV)](https://github.com/nazdridoy/kokoro-tts/raw/main/previews/demo.wav)
 
