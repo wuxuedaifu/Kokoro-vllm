@@ -25,4 +25,4 @@ voices.json
 *.txt
 *.pdf
 !requirements.txt
-
+!demo.*
