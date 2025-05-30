@@ -1,6 +1,6 @@
 [project]
 name = "kokoro-tts"
-version = "2.0.2"
+version = "2.0.3"
 description = "A CLI text-to-speech tool using the Kokoro model, supporting multiple languages, voices (with blending), and various input formats including EPUB books and PDF documents."
 readme = "README.md"
 requires-python = ">=3.9, <3.13"
