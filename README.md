@@ -45,13 +45,21 @@ cd kokoro-tts
 ```
 
 2. Install required packages:
+
+It is recommended to use a virtual environment to avoid dependency conflicts.
+
+**With `uv` (recommended):**
 ```bash
-pip install -r requirements.txt
-```
-or
-```bash
+uv venv
 uv sync
 ```
+**With `pip`:**
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 Note: You can also use `uv` as a faster alternative to pip for package installation. (This is a uv project)
 Note: Python>=3.13 is not currently supported.
 
@@ -86,6 +94,9 @@ Basic usage:
 ./kokoro-tts <input_text_file> [<output_audio_file>] [options]
 ```
 
+> [!NOTE]
+> If you have installed the dependencies in a virtual environment, you need to either activate it first (e.g., `source .venv/bin/activate`) or use `uv run` to execute the commands.
+
 ### Commands
 
 - `-h, --help`: Show help message
@@ -118,8 +129,11 @@ Basic usage:
 kokoro-tts input.txt output.wav --speed 1.2 --lang en-us --voice af_sarah
 
 # Read from standard input (stdin)
-echo "Hello World" | kokoro-tts /dev/stdin --stream
+echo "Hello World" | uv run kokoro-tts /dev/stdin --stream
 cat input.txt | kokoro-tts /dev/stdin output.wav
+
+# Use voice blending (60-40 mix) (with uv run)
+uv run kokoro-tts input.txt output.wav --voice "af_sarah:60,am_adam:40"
 
 # Use voice blending (60-40 mix)
 kokoro-tts input.txt output.wav --voice "af_sarah:60,am_adam:40"
