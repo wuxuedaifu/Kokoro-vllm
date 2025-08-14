@@ -38,9 +38,26 @@ https://github.com/user-attachments/assets/8413e640-59e9-490e-861d-49187e967526
 
 ## Installation
 
-### Method 1: Install from Git (Recommended)
+### Method 1: Install from PyPI (Recommended)
 
-The easiest way to install Kokoro TTS is directly from the repository:
+The easiest way to install Kokoro TTS is from PyPI:
+
+```bash
+# Using uv (recommended)
+uv tool install kokoro-tts
+
+# Using pip
+pip install kokoro-tts
+```
+
+After installation, you can run:
+```bash
+kokoro-tts --help
+```
+
+### Method 2: Install from Git
+
+Install directly from the repository:
 
 ```bash
 # Using uv (recommended)
@@ -50,12 +67,7 @@ uv tool install git+https://github.com/nazdridoy/kokoro-tts
 pip install git+https://github.com/nazdridoy/kokoro-tts
 ```
 
-After installation, you can run:
-```bash
-kokoro-tts --help
-```
-
-### Method 2: Clone and Install Locally
+### Method 3: Clone and Install Locally
 
 1. Clone the repository:
 ```bash
@@ -87,7 +99,7 @@ uv run kokoro-tts --help
 kokoro-tts --help
 ```
 
-### Method 3: Run Without Installation
+### Method 4: Run Without Installation
 
 If you prefer to run without installing:
 
@@ -157,9 +169,9 @@ kokoro-tts <input_text_file> [<output_audio_file>] [options]
 ```
 
 > [!NOTE]
-> - If you installed via Method 1 (git install), use `kokoro-tts` directly
-> - If you installed via Method 2 (local install), use `uv run kokoro-tts` or activate your virtual environment first
-> - If you're using Method 3 (no install), use `uv run -m kokoro_tts` or `python -m kokoro_tts` with activated venv
+> - If you installed via Method 1 (PyPI) or Method 2 (git install), use `kokoro-tts` directly
+> - If you installed via Method 3 (local install), use `uv run kokoro-tts` or activate your virtual environment first
+> - If you're using Method 4 (no install), use `uv run -m kokoro_tts` or `python -m kokoro_tts` with activated venv
 
 ### Commands
 
@@ -231,8 +243,8 @@ kokoro-tts --help-languages
 ```
 
 > [!TIP]
-> If you're using Method 2, replace `kokoro-tts` with `uv run kokoro-tts` in the examples above.
-> If you're using Method 3, replace `kokoro-tts` with `uv run -m kokoro_tts` or `python -m kokoro_tts` in the examples above.
+> If you're using Method 3, replace `kokoro-tts` with `uv run kokoro-tts` in the examples above.
+> If you're using Method 4, replace `kokoro-tts` with `uv run -m kokoro_tts` or `python -m kokoro_tts` in the examples above.
 
 ## Features in Detail
 
