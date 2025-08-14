@@ -779,8 +779,13 @@ def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: floa
         return None, None
 
 def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, lang="en-us", 
-                         stream=False, split_output=None, format="wav", debug=False):
+                         stream=False, split_output=None, format="wav", debug=False, stdin_indicators=None):
     global stop_spinner
+    
+    # Define stdin indicators if not provided
+    if stdin_indicators is None:
+        stdin_indicators = ['/dev/stdin', '-', 'CONIN$']  # CONIN$ is Windows stdin
+    
     # Load Kokoro model
     try:
         kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
@@ -792,48 +797,53 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
         if voice:
             voice = validate_voice(voice, kokoro)
         else:
-            # Interactive voice selection
-            voices = list_available_voices(kokoro)
-            print("\nHow to choose a voice:")
-            print("You can use either a single voice or blend two voices together.")
-            print("\nFor a single voice:")
-            print("  • Just enter one number (example: '7')")
-            print("\nFor blending two voices:")
-            print("  • Enter two numbers separated by comma")
-            print("  • Optionally add weights after each number using ':weight'")
-            print("\nExamples:")
-            print("  • '7'      - Use voice #7 only")
-            print("  • '7,11'   - Mix voices #7 and #11 equally (50% each)")
-            print("  • '7:60,11:40' - Mix 60% of voice #7 with 40% of voice #11")
-            try:
-                voice_input = input("Choose voice(s) by number: ")
-                if ',' in voice_input:
-                    # Handle blended voices
-                    pairs = []
-                    for pair in voice_input.split(','):
-                        if ':' in pair:
-                            num, weight = pair.strip().split(':')
-                            voice_idx = int(num.strip()) - 1
-                            if not (0 <= voice_idx < len(voices)):
-                                raise ValueError(f"Invalid voice number: {int(num)}")
-                            pairs.append(f"{voices[voice_idx]}:{weight}")
-                        else:
-                            voice_idx = int(pair.strip()) - 1
-                            if not (0 <= voice_idx < len(voices)):
-                                raise ValueError(f"Invalid voice number: {int(pair)}")
-                            pairs.append(voices[voice_idx])
-                    voice = ','.join(pairs)
-                else:
-                    # Single voice
-                    voice_choice = int(voice_input) - 1
-                    if not (0 <= voice_choice < len(voices)):
-                        raise ValueError("Invalid choice")
-                    voice = voices[voice_choice]
-                # Validate and potentially convert to blend
-                voice = validate_voice(voice, kokoro)
-            except (ValueError, IndexError):
-                print("Invalid choice. Using default voice.")
+            # Check if we're using stdin (can't do interactive input)
+            if input_file in stdin_indicators:
+                print("Using stdin - automatically selecting default voice (af_sarah)")
                 voice = "af_sarah"  # default voice
+            else:
+                # Interactive voice selection
+                voices = list_available_voices(kokoro)
+                print("\nHow to choose a voice:")
+                print("You can use either a single voice or blend two voices together.")
+                print("\nFor a single voice:")
+                print("  • Just enter one number (example: '7')")
+                print("\nFor blending two voices:")
+                print("  • Enter two numbers separated by comma")
+                print("  • Optionally add weights after each number using ':weight'")
+                print("\nExamples:")
+                print("  • '7'      - Use voice #7 only")
+                print("  • '7,11'   - Mix voices #7 and #11 equally (50% each)")
+                print("  • '7:60,11:40' - Mix 60% of voice #7 with 40% of voice #11")
+                try:
+                    voice_input = input("Choose voice(s) by number: ")
+                    if ',' in voice_input:
+                        # Handle blended voices
+                        pairs = []
+                        for pair in voice_input.split(','):
+                            if ':' in pair:
+                                num, weight = pair.strip().split(':')
+                                voice_idx = int(num.strip()) - 1
+                                if not (0 <= voice_idx < len(voices)):
+                                    raise ValueError(f"Invalid voice number: {int(num)}")
+                                pairs.append(f"{voices[voice_idx]}:{weight}")
+                            else:
+                                voice_idx = int(pair.strip()) - 1
+                                if not (0 <= voice_idx < len(voices)):
+                                    raise ValueError(f"Invalid voice number: {int(pair)}")
+                                pairs.append(voices[voice_idx])
+                        voice = ','.join(pairs)
+                    else:
+                        # Single voice
+                        voice_choice = int(voice_input) - 1
+                        if not (0 <= voice_choice < len(voices)):
+                            raise ValueError("Invalid choice")
+                        voice = voices[voice_choice]
+                    # Validate and potentially convert to blend
+                    voice = validate_voice(voice, kokoro)
+                except (ValueError, IndexError):
+                    print("Invalid choice. Using default voice.")
+                    voice = "af_sarah"  # default voice
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -875,8 +885,12 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
         parser = PdfParser(input_file, debug=debug)
         chapters = parser.get_chapters()
     else:
-        with open(input_file, 'r', encoding='utf-8') as file:
-            text = file.read()
+        # Handle stdin specially (cross-platform)
+        if input_file in stdin_indicators:
+            text = sys.stdin.read()
+        else:
+            with open(input_file, 'r', encoding='utf-8') as file:
+                text = file.read()
         # Treat single text file as one chapter
         chapters = [{'title': 'Chapter 1', 'content': text}]
 
@@ -1194,22 +1208,27 @@ def get_valid_options():
         '--debug'  # Add debug option
     }
 
-if __name__ == "__main__":
-    # Validate command line options first
+
+
+
+def main():
+    """Main entry point for the kokoro-tts CLI tool."""
+    # Define stdin indicators once (cross-platform)
+    stdin_indicators = ['/dev/stdin', '-', 'CONIN$']  # CONIN$ is Windows stdin
+    
+    # Validate command line arguments
     valid_options = get_valid_options()
-    unknown_options = []
     
     # Check for unknown options
-    i = 1
+    unknown_options = []
+    i = 0
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg.startswith('--') or arg.startswith('-'):
-            # Check if it's a valid option
-            if arg not in valid_options:
-                unknown_options.append(arg)
+        if arg.startswith('--') and arg not in valid_options:
+            unknown_options.append(arg)
             # Skip the next argument if it's a value for an option that takes parameters
-            elif arg in {'--speed', '--lang', '--voice', '--split-output', '--format'}:
-                i += 1
+        elif arg in {'--speed', '--lang', '--voice', '--split-output', '--format'}:
+            i += 1
         i += 1
     
     # If unknown options were found, show error and help
@@ -1287,8 +1306,8 @@ if __name__ == "__main__":
         print_usage()
         sys.exit(1)
 
-    # Ensure the input file exists
-    if not os.access(input_file, os.R_OK):
+    # Ensure the input file exists (skip check for stdin)
+    if input_file not in stdin_indicators and not os.access(input_file, os.R_OK):
         print(f"Error: Cannot read from {input_file}. File may not exist or you may not have permission to read it.")
         sys.exit(1)
     
@@ -1303,5 +1322,9 @@ if __name__ == "__main__":
     # Convert text to audio with debug flag
     convert_text_to_audio(input_file, output_file, voice=voice, stream=stream, 
                          speed=speed, lang=lang, split_output=split_output, 
-                         format=format, debug=debug)
+                         format=format, debug=debug, stdin_indicators=stdin_indicators)
+
+
+if __name__ == '__main__':
+    main()
 

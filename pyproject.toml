@@ -1,6 +1,6 @@
 [project]
 name = "kokoro-tts"
-version = "2.0.3"
+version = "2.1.1"
 description = "A CLI text-to-speech tool using the Kokoro model, supporting multiple languages, voices (with blending), and various input formats including EPUB books and PDF documents."
 readme = "README.md"
 requires-python = ">=3.9, <3.13"
@@ -13,3 +13,10 @@ dependencies = [
     "sounddevice>=0.5.1",
     "soundfile>=0.13.0",
 ]
+
+[project.scripts]
+kokoro-tts = "kokoro_tts:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
