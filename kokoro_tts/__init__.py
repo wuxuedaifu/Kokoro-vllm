@@ -29,26 +29,27 @@ warnings.filterwarnings("ignore", category=FutureWarning, module='ebooklib')
 stop_spinner = False
 stop_audio = False
 
-def check_required_files():
+def check_required_files(model_path="kokoro-v1.0.onnx", voices_path="voices-v1.0.bin"):
     """Check if required model files exist and provide helpful error messages."""
     required_files = {
-        "kokoro-v1.0.onnx": "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx",
-        "voices-v1.0.bin": "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin"
+        model_path: "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx",
+        voices_path: "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin"
     }
     
     missing_files = []
-    for filename, download_url in required_files.items():
-        if not os.path.exists(filename):
-            missing_files.append((filename, download_url))
+    for filepath, download_url in required_files.items():
+        if not os.path.exists(filepath):
+            missing_files.append((filepath, download_url))
     
     if missing_files:
         print("Error: Required model files are missing:")
-        for filename, download_url in missing_files:
-            print(f"  • {filename}")
+        for filepath, download_url in missing_files:
+            print(f"  • {filepath}")
         print("\nYou can download the missing files using these commands:")
-        for filename, download_url in missing_files:
+        for filepath, download_url in missing_files:
             print(f"  wget {download_url}")
         print(f"\nPlace the downloaded files in the same directory where you run the `kokoro-tts` command.")
+        print(f"Or specify custom paths using --model and --voices options.")
         sys.exit(1)
 
 def spinning_wheel(message="Processing...", progress=None):
@@ -162,6 +163,8 @@ Options:
     --split-output <dir> Save each chunk as separate file in directory
     --format <str>      Audio format: wav or mp3 (default: wav)
     --debug             Show detailed debug information
+    --model <path>      Path to kokoro-v1.0.onnx model file (default: ./kokoro-v1.0.onnx)
+    --voices <path>     Path to voices-v1.0.bin file (default: ./voices-v1.0.bin)
 
 Input formats:
     .txt               Text file input
@@ -180,13 +183,15 @@ Examples:
     kokoro-tts --help-voices
     kokoro-tts --help-languages
     kokoro-tts input.epub --split-output ./chunks/ --debug
+    kokoro-tts input.txt output.wav --model /path/to/model.onnx --voices /path/to/voices.bin
+    kokoro-tts input.txt --model ./models/kokoro-v1.0.onnx --voices ./models/voices-v1.0.bin
     """)
 
-def print_supported_languages():
+def print_supported_languages(model_path="kokoro-v1.0.onnx", voices_path="voices-v1.0.bin"):
     """Print all supported languages from Kokoro."""
-    check_required_files()
+    check_required_files(model_path, voices_path)
     try:
-        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+        kokoro = Kokoro(model_path, voices_path)
         languages = sorted(kokoro.get_languages())
         print("\nSupported languages:")
         for lang in languages:
@@ -196,11 +201,11 @@ def print_supported_languages():
         print(f"Error loading model to get supported languages: {e}")
         sys.exit(1)
 
-def print_supported_voices():
+def print_supported_voices(model_path="kokoro-v1.0.onnx", voices_path="voices-v1.0.bin"):
     """Print all supported voices from Kokoro."""
-    check_required_files()
+    check_required_files(model_path, voices_path)
     try:
-        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+        kokoro = Kokoro(model_path, voices_path)
         voices = sorted(kokoro.get_voices())
         print("\nSupported voices:")
         for idx, voice in enumerate(voices):
@@ -803,7 +808,8 @@ def process_chunk_sequential(chunk: str, kokoro: Kokoro, voice: str, speed: floa
         return None, None
 
 def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, lang="en-us", 
-                         stream=False, split_output=None, format="wav", debug=False, stdin_indicators=None):
+                         stream=False, split_output=None, format="wav", debug=False, stdin_indicators=None,
+                         model_path="kokoro-v1.0.onnx", voices_path="voices-v1.0.bin"):
     global stop_spinner
     
     # Define stdin indicators if not provided
@@ -811,11 +817,11 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
         stdin_indicators = ['/dev/stdin', '-', 'CONIN$']  # CONIN$ is Windows stdin
     
     # Check for required files first
-    check_required_files()
+    check_required_files(model_path, voices_path)
     
     # Load Kokoro model
     try:
-        kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+        kokoro = Kokoro(model_path, voices_path)
 
         # Validate language after loading model
         lang = validate_language(lang, kokoro)
@@ -1232,7 +1238,9 @@ def get_valid_options():
         '--voice',
         '--split-output',
         '--format',
-        '--debug'  # Add debug option
+        '--debug',
+        '--model',
+        '--voices'
     }
 
 
@@ -1254,7 +1262,7 @@ def main():
         if arg.startswith('--') and arg not in valid_options:
             unknown_options.append(arg)
             # Skip the next argument if it's a value for an option that takes parameters
-        elif arg in {'--speed', '--lang', '--voice', '--split-output', '--format'}:
+        elif arg in {'--speed', '--lang', '--voice', '--split-output', '--format', '--model', '--voices'}:
             i += 1
         i += 1
     
@@ -1271,17 +1279,38 @@ def main():
         print_usage()  # Show the full help text
         sys.exit(1)
     
-    # Handle help commands first
-    if len(sys.argv) == 2:
-        if sys.argv[1] in ['-h', '--help']:
-            print_usage()
-            sys.exit(0)
-        elif sys.argv[1] == '--help-languages':
-            print_supported_languages()
-            sys.exit(0)
-        elif sys.argv[1] == '--help-voices':
-            print_supported_voices()
-            sys.exit(0)
+    # Handle help commands first (before argument parsing)
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print_usage()
+        sys.exit(0)
+    elif '--help-languages' in sys.argv:
+        # For help commands, we need to parse model/voices paths first
+        model_path = "kokoro-v1.0.onnx"  # default model path
+        voices_path = "voices-v1.0.bin"  # default voices path
+        
+        # Parse model/voices paths for help commands
+        for i, arg in enumerate(sys.argv):
+            if arg == '--model' and i + 1 < len(sys.argv):
+                model_path = sys.argv[i + 1]
+            elif arg == '--voices' and i + 1 < len(sys.argv):
+                voices_path = sys.argv[i + 1]
+        
+        print_supported_languages(model_path, voices_path)
+        sys.exit(0)
+    elif '--help-voices' in sys.argv:
+        # For help commands, we need to parse model/voices paths first
+        model_path = "kokoro-v1.0.onnx"  # default model path
+        voices_path = "voices-v1.0.bin"  # default voices path
+        
+        # Parse model/voices paths for help commands
+        for i, arg in enumerate(sys.argv):
+            if arg == '--model' and i + 1 < len(sys.argv):
+                model_path = sys.argv[i + 1]
+            elif arg == '--voices' and i + 1 < len(sys.argv):
+                voices_path = sys.argv[i + 1]
+        
+        print_supported_voices(model_path, voices_path)
+        sys.exit(0)
     
     # Parse arguments
     input_file = None
@@ -1298,6 +1327,8 @@ def main():
     split_output = None
     format = "wav"  # default format
     merge_chunks = '--merge-chunks' in sys.argv
+    model_path = "kokoro-v1.0.onnx"  # default model path
+    voices_path = "voices-v1.0.bin"  # default voices path
     
     # Parse optional arguments
     for i, arg in enumerate(sys.argv):
@@ -1318,6 +1349,10 @@ def main():
             if format not in ['wav', 'mp3']:
                 print("Error: Format must be either 'wav' or 'mp3'")
                 sys.exit(1)
+        elif arg == '--model' and i + 1 < len(sys.argv):
+            model_path = sys.argv[i + 1]
+        elif arg == '--voices' and i + 1 < len(sys.argv):
+            voices_path = sys.argv[i + 1]
     
     # Handle merge chunks operation
     if merge_chunks:
@@ -1349,7 +1384,8 @@ def main():
     # Convert text to audio with debug flag
     convert_text_to_audio(input_file, output_file, voice=voice, stream=stream, 
                          speed=speed, lang=lang, split_output=split_output, 
-                         format=format, debug=debug, stdin_indicators=stdin_indicators)
+                         format=format, debug=debug, stdin_indicators=stdin_indicators,
+                         model_path=model_path, voices_path=voices_path)
 
 
 if __name__ == '__main__':
