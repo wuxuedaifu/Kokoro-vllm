@@ -29,6 +29,28 @@ warnings.filterwarnings("ignore", category=FutureWarning, module='ebooklib')
 stop_spinner = False
 stop_audio = False
 
+def check_required_files():
+    """Check if required model files exist and provide helpful error messages."""
+    required_files = {
+        "kokoro-v1.0.onnx": "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx",
+        "voices-v1.0.bin": "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin"
+    }
+    
+    missing_files = []
+    for filename, download_url in required_files.items():
+        if not os.path.exists(filename):
+            missing_files.append((filename, download_url))
+    
+    if missing_files:
+        print("Error: Required model files are missing:")
+        for filename, download_url in missing_files:
+            print(f"  • {filename}")
+        print("\nYou can download the missing files using these commands:")
+        for filename, download_url in missing_files:
+            print(f"  wget {download_url}")
+        print(f"\nPlace the downloaded files in the same directory where you run the `kokoro-tts` command.")
+        sys.exit(1)
+
 def spinning_wheel(message="Processing...", progress=None):
     """Display a spinning wheel with a message."""
     spinner = itertools.cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
@@ -162,6 +184,7 @@ Examples:
 
 def print_supported_languages():
     """Print all supported languages from Kokoro."""
+    check_required_files()
     try:
         kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
         languages = sorted(kokoro.get_languages())
@@ -175,6 +198,7 @@ def print_supported_languages():
 
 def print_supported_voices():
     """Print all supported voices from Kokoro."""
+    check_required_files()
     try:
         kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
         voices = sorted(kokoro.get_voices())
@@ -785,6 +809,9 @@ def convert_text_to_audio(input_file, output_file=None, voice=None, speed=1.0, l
     # Define stdin indicators if not provided
     if stdin_indicators is None:
         stdin_indicators = ['/dev/stdin', '-', 'CONIN$']  # CONIN$ is Windows stdin
+    
+    # Check for required files first
+    check_required_files()
     
     # Load Kokoro model
     try:

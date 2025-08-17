@@ -12,7 +12,7 @@ test.*
 *.mp3
 book_audio/
 chunks/
-voices.json
+
 *.npz
 *.bin
 *.onnx

@@ -145,8 +145,7 @@ wget https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.
 wget https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx
 ```
 
-> [!NOTE]
-> The script will automatically use `voices-v1.0.bin` if present, falling back to `voices.json` if the bin file is not available. Place these files in the same directory where you run the `kokoro-tts` command.
+> The script requires `voices-v1.0.bin` and `kokoro-v1.0.onnx` to be present in the same directory where you run the `kokoro-tts` command.
 
 ## Supported voices:
 
