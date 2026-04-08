@@ -34,7 +34,7 @@ https://github.com/user-attachments/assets/8413e640-59e9-490e-861d-49187e967526
 
 ## Prerequisites
 
-- Python 3.9-3.12 (Python 3.13+ is not currently supported)
+- Python 3.11-3.12 (Python 3.13+ is not currently supported)
 
 ## Installation
 
