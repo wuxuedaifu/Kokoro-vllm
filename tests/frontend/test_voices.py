@@ -34,3 +34,7 @@ def test_index_clamped():
 
 def test_list_voices():
     assert sorted(list_voices(_packs())) == ["af_sarah", "am_adam"]
+
+def test_parse_rejects_zero_sum_blend():
+    with pytest.raises(ValueError):
+        parse_voice_spec("af_sarah:0,am_adam:0")

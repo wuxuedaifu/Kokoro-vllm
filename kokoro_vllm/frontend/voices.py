@@ -33,6 +33,8 @@ def parse_voice_spec(spec: str) -> list[tuple[str, float]]:
     total = sum(w for _, w in out)
     if len(parts) == 1:
         return [(out[0][0], 100.0)]
+    if total <= 0:
+        raise ValueError("blend weights must sum to a positive value")
     return [(n, w * 100.0 / total) for n, w in out]
 
 
