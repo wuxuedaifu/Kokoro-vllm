@@ -2,6 +2,7 @@ import asyncio
 import io
 import shutil
 import subprocess
+import uuid
 
 import numpy as np
 import soundfile as sf
@@ -46,22 +47,36 @@ def encode_audio(samples: np.ndarray, fmt: str, sample_rate: int) -> bytes:
 
 
 async def stream_synthesis(engine, chunks, packs, voice, speed, fmt, sample_rate):
+    base = uuid.uuid4().hex
+
     async def run(i, chunk):
         num_tokens = len(chunk.input_ids) - 2
         ref_s = select_ref_s(packs, voice, num_tokens)
         audio = await engine.synthesize_chunk(
-            chunk.input_ids, ref_s, speed, request_id=f"req-{id(chunks)}-{i}")
+            chunk.input_ids, ref_s, speed, request_id=f"req-{base}-{i}")
         return i, audio
 
     tasks = [asyncio.ensure_future(run(i, c)) for i, c in enumerate(chunks)]
-    pending = {t for t in tasks}
-    buffered: dict[int, np.ndarray] = {}
-    next_idx = 0
-    while pending:
-        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-        for t in done:
-            i, audio = t.result()
-            buffered[i] = audio
-        while next_idx in buffered:
-            yield encode_audio(buffered.pop(next_idx), fmt, sample_rate)
-            next_idx += 1
+    try:
+        pending = {t for t in tasks}
+        buffered: dict[int, np.ndarray] = {}
+        next_idx = 0
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for t in done:
+                i, audio = t.result()
+                buffered[i] = audio
+            while next_idx in buffered:
+                yield encode_audio(buffered.pop(next_idx), fmt, sample_rate)
+                next_idx += 1
+    finally:
+        # On any exit path — normal completion, an exception from a chunk
+        # task, or GeneratorExit from the consumer closing this generator
+        # early (client disconnect) — cancel any tasks still in flight so we
+        # don't leave orphaned engine.synthesize_chunk calls running with no
+        # consumer (frees the corresponding vLLM slots). Awaiting with
+        # return_exceptions=True lets cancellation settle without raising.
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
