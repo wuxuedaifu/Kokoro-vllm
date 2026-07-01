@@ -43,3 +43,4 @@ docs/
 *.err
 .pytest_cache/
 scratchpad/
+handoff/
