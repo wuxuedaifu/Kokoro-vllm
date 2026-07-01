@@ -1,14 +1,14 @@
 [project]
-name = "kokoro-tts"
-version = "2.3.1"
-description = "A CLI text-to-speech tool using the Kokoro model, supporting multiple languages, voices (with blending), and various input formats including EPUB books and PDF documents."
+name = "kokoro-vllm"
+version = "0.1.0"
+description = "Serve the Kokoro-82M TTS model through the vLLM V1 engine — an OpenAI-compatible, low-latency streaming FastAPI server. Includes the original ONNX CLI."
 readme = "README.md"
 requires-python = ">=3.11, <3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "Nazmul Hossain", email = "nazdridoy@gmail.com"}
+    {name = "wuxuedaifu", email = "wuxuedaifu@gmail.com"}
 ]
-keywords = ["text-to-speech", "tts", "kokoro", "audio", "epub", "pdf", "cli"]
+keywords = ["text-to-speech", "tts", "kokoro", "vllm", "streaming", "server", "openai", "audio"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
@@ -33,14 +33,15 @@ dependencies = [
 
 [project.scripts]
 kokoro-tts = "kokoro_tts:main"
+kokoro-vllm-server = "kokoro_vllm.server.__main__:main"
 
 [project.entry-points."vllm.general_plugins"]
 kokoro_register = "kokoro_vllm.model.register:register"
 
 [project.urls]
-Homepage = "https://github.com/nazdridoy/kokoro-tts"
-Repository = "https://github.com/nazdridoy/kokoro-tts"
-Issues = "https://github.com/nazdridoy/kokoro-tts/issues"
+Homepage = "https://github.com/wuxuedaifu/Kokoro-vllm"
+Repository = "https://github.com/wuxuedaifu/Kokoro-vllm"
+Issues = "https://github.com/wuxuedaifu/Kokoro-vllm/issues"
 
 [build-system]
 requires = ["hatchling"]
