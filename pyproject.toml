@@ -34,6 +34,9 @@ dependencies = [
 [project.scripts]
 kokoro-tts = "kokoro_tts:main"
 
+[project.entry-points."vllm.general_plugins"]
+kokoro_register = "kokoro_vllm.model.register:register"
+
 [project.urls]
 Homepage = "https://github.com/nazdridoy/kokoro-tts"
 Repository = "https://github.com/nazdridoy/kokoro-tts"
