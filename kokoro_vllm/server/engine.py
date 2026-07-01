@@ -62,7 +62,19 @@ class KokoroEngine:
                 model=self.settings.model_dir,
                 runner="pooling",
                 enforce_eager=True,
-                max_num_seqs=self.settings.max_num_seqs,
+                # Pinned to 1, NOT `self.settings.max_num_seqs` (default 64).
+                # Task 11/12 established that the current model only
+                # supports single-request batching: with >1 request in a
+                # forward pass, the `.shared` multimodal "voice" kwargs
+                # collapse (all but the last request's ref_s is lost) and
+                # `_per_request_token_spans` raises `NotImplementedError`
+                # for num_requests>1 *inside* the engine-core loop, which
+                # can crash the whole engine rather than cleanly rejecting
+                # one request. `ServerSettings.max_num_seqs` is kept as a
+                # field for the future `.shared`->`.batched` multimodal
+                # upgrade (the throughput follow-up) but is intentionally
+                # not used here until that lands.
+                max_num_seqs=1,
                 max_model_len=512,
                 skip_tokenizer_init=True,
                 dtype="float32",

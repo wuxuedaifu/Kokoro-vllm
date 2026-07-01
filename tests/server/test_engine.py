@@ -2,6 +2,7 @@ import asyncio
 
 import numpy as np
 
+from kokoro_vllm.config import ServerSettings
 from kokoro_vllm.server.engine import KokoroEngine
 
 
@@ -81,3 +82,38 @@ def test_close_shuts_down_llm_and_clears_ready():
     asyncio.run(eng.close())
     assert fake.shutdown_called is True
     assert eng.is_ready() is False
+
+
+def test_start_pins_single_request(monkeypatch):
+    """Regression for the Task 13 review bug: start() must always pin
+    AsyncEngineArgs(max_num_seqs=1), ignoring ServerSettings.max_num_seqs,
+    because the current model only supports single-request batching (Task
+    11/12: >1 request collapses the `.shared` multimodal voice kwargs and
+    `_per_request_token_spans` raises NotImplementedError inside the
+    engine-core loop). Patches the exact vLLM symbols `start()` imports so
+    no real engine boots and this stays GPU-free."""
+    import vllm.engine.arg_utils as arg_utils_mod
+    import vllm.v1.engine.async_llm as async_llm_mod
+
+    captured = {}
+
+    class FakeAsyncEngineArgs:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    class FakeAsyncLLM:
+        @staticmethod
+        def from_engine_args(args):
+            return object()
+
+    monkeypatch.setattr(arg_utils_mod, "AsyncEngineArgs", FakeAsyncEngineArgs)
+    monkeypatch.setattr(async_llm_mod, "AsyncLLM", FakeAsyncLLM)
+    monkeypatch.setattr("kokoro_vllm.model.register.register", lambda: None)
+
+    eng = KokoroEngine(settings=ServerSettings(max_num_seqs=64))
+    asyncio.run(eng.start())
+
+    assert captured["max_num_seqs"] == 1
+    assert captured["runner"] == "pooling"
+    assert captured["dtype"] == "float32"
+    assert eng.is_ready() is True
