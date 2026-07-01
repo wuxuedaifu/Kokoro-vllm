@@ -34,3 +34,12 @@ kokoro-model/
 *.safetensors
 kokoro-v1.0.onnx
 voices-v1.0.bin
+
+# Planning / process docs and scratch (not shipped)
+docs/
+.superpowers/
+# Useless / generated
+*.log
+*.err
+.pytest_cache/
+scratchpad/
