@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class ServerSettings:
     model_dir: str = "./kokoro-model"
     voices_path: str = "./voices-v1.0.bin"
-    vocab_path: str = "./config.json"
+    vocab_path: str = "./kokoro-model/config.json"
     device: str = "cuda"
     max_num_seqs: int = 64
     sample_rate: int = 24000

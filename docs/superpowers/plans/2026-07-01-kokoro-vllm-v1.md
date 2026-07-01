@@ -4,6 +4,8 @@
 
 **Goal:** Serve the Kokoro TTS model through the vLLM V1 engine as a `SupportsMultiModal` pooling model (whole `KModel` forward in-worker, `ref_s` as multimodal conditioning, waveform as pooled output), behind an OpenAI-compatible streaming FastAPI server.
 
+> NOTE: the code as merged is the source of truth. Several code snippets in this plan (notably the Task 5 chunker and the Task 9–13 vLLM model/pooler/engine examples) were written before the vLLM 0.24.0 / kokoro APIs were verified; the implementation corrected them (see docs/superpowers/plans/vllm-interface-notes.md and the task commits). Read the code for current behavior.
+
 **Architecture:** A new `kokoro_vllm/` package. The frontend (main process) does G2P → phoneme tokens → ≤510-token chunks → per-chunk `ref_s[256]`, then submits each chunk as a vLLM `AsyncLLM.encode()` request carrying `ref_s` via the multimodal channel. The registered `KokoroForConditionalGeneration` model runs the entire `KModel` forward inside the vLLM worker and returns the 24 kHz waveform as its pooled output. The FastAPI layer fans chunks out concurrently (vLLM batches them) and streams audio bytes back in submission order.
 
 **Tech Stack:** Python 3.11–3.12, PyTorch, `vllm` (V1, pinned), `kokoro` (`KModel`), `misaki` + `espeak-ng` (G2P), FastAPI + uvicorn, `soundfile`/`numpy`, `ffmpeg` (mp3/opus), pytest.

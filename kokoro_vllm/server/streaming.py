@@ -36,12 +36,15 @@ def encode_audio(samples: np.ndarray, fmt: str, sample_rate: int) -> bytes:
                 f"{fmt} requires ffmpeg; install ffmpeg or use pcm/wav"
             )
         codec = "libmp3lame" if fmt == "mp3" else "libopus"
-        proc = subprocess.run(
-            ["ffmpeg", "-f", "s16le", "-ar", str(sample_rate), "-ac", "1",
-             "-i", "pipe:0", "-f", fmt, "-c:a", codec, "pipe:1"],
-            input=_to_int16(samples).tobytes(),
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True,
-        )
+        try:
+            proc = subprocess.run(
+                ["ffmpeg", "-f", "s16le", "-ar", str(sample_rate), "-ac", "1",
+                 "-i", "pipe:0", "-f", fmt, "-c:a", codec, "pipe:1"],
+                input=_to_int16(samples).tobytes(),
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise AudioEncodeError(f"{fmt} encoding failed: ffmpeg exited with status {e.returncode}") from e
         return proc.stdout
     raise AudioEncodeError(f"Unknown format: {fmt}")
 

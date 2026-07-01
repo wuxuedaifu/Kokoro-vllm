@@ -330,7 +330,7 @@ with their defaults):
 |---|---|---|
 | `KOKORO_MODEL_DIR` | `./kokoro-model` | Directory with `model.safetensors` + `config.json` from step 2 |
 | `KOKORO_VOICES_PATH` | `./voices-v1.0.bin` | Voicepack archive |
-| `KOKORO_VOCAB_PATH` | `./config.json` | Phoneme vocab source — point this at `kokoro-model/config.json` |
+| `KOKORO_VOCAB_PATH` | `./kokoro-model/config.json` | Phoneme vocab source (the `config.json` the converter wrote in step 2) |
 | `KOKORO_DEVICE` | `cuda` | Inference device |
 | `KOKORO_SAMPLE_RATE` | `24000` | Output sample rate |
 

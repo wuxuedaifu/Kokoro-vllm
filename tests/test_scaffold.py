@@ -6,6 +6,7 @@ def test_defaults():
     assert s.sample_rate == 24000
     assert s.max_phoneme_tokens == 510
     assert s.device == "cuda"
+    assert s.vocab_path == "./kokoro-model/config.json"
 
 def test_from_env_overrides(monkeypatch):
     monkeypatch.setenv("KOKORO_DEVICE", "cpu")
