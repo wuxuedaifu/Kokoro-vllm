@@ -26,3 +26,11 @@ chunks/
 *.pdf
 !requirements.txt
 !demo.*
+
+.superpowers/
+.venv/
+kokoro-model/
+*.pth
+*.safetensors
+kokoro-v1.0.onnx
+voices-v1.0.bin
