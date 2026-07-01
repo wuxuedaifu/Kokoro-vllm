@@ -13,8 +13,8 @@ _MEDIA = {"pcm": "audio/pcm", "wav": "audio/wav",
           "mp3": "audio/mpeg", "opus": "audio/opus"}
 
 
-def create_app(engine, g2p_factory, vocab, packs, settings) -> FastAPI:
-    app = FastAPI(title="Kokoro-vLLM")
+def create_app(engine, g2p_factory, vocab, packs, settings, lifespan=None) -> FastAPI:
+    app = FastAPI(title="Kokoro-vLLM", lifespan=lifespan)
 
     @app.get("/health")
     def health():

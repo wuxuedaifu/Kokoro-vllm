@@ -278,6 +278,134 @@ kokoro-tts --help-languages
 - Standard input (stdin)
 - Supports piping from other programs
 
+## vLLM Streaming Server
+
+In addition to the ONNX-based CLI above, this repo ships an **opt-in** HTTP
+TTS server (`kokoro_vllm/`) that runs the real PyTorch Kokoro model on top of
+[vLLM V1](https://github.com/vllm-project/vllm)'s pooling runner, exposing an
+OpenAI-compatible-shaped `/v1/audio/speech` streaming endpoint. It is a
+separate code path from the `kokoro-tts` CLI: installing/running it does not
+change or replace the existing ONNX CLI in any way.
+
+### 1. Install
+
+The server has its own extra (heavier deps: `vllm`, `torch`, `kokoro`,
+`misaki`, `fastapi`, `uvicorn`) so the base CLI install stays light:
+
+```bash
+pip install "kokoro-tts[vllm]"
+# or, from a checkout:
+uv pip install -e ".[vllm]"
+```
+
+### 2. Get the weights and convert them
+
+You need the original Kokoro checkpoint (`kokoro-v1_0.pth`) and its
+`config.json` (e.g. from the [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M)
+repo on Hugging Face), plus the `voices-v1.0.bin` voicepack archive. Convert
+the `.pth` checkpoint into the safetensors + config.json layout vLLM expects:
+
+```bash
+python scripts/convert_weights.py \
+  --pth kokoro-v1_0.pth \
+  --config config.json \
+  --out kokoro-model/
+```
+
+This writes `kokoro-model/model.safetensors` and `kokoro-model/config.json`
+(the latter carries the raw Kokoro config plus the `kmodel_kwargs`/
+`architectures`/`model_type` fields vLLM needs to boot the model).
+
+### 3. Run
+
+```bash
+python -m kokoro_vllm.server
+```
+
+This boots a real vLLM `AsyncLLM` engine (GPU required) and serves on
+`0.0.0.0:8000`. Configure it via environment variables (all optional, shown
+with their defaults):
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `KOKORO_MODEL_DIR` | `./kokoro-model` | Directory with `model.safetensors` + `config.json` from step 2 |
+| `KOKORO_VOICES_PATH` | `./voices-v1.0.bin` | Voicepack archive |
+| `KOKORO_VOCAB_PATH` | `./config.json` | Phoneme vocab source — point this at `kokoro-model/config.json` |
+| `KOKORO_DEVICE` | `cuda` | Inference device |
+| `KOKORO_SAMPLE_RATE` | `24000` | Output sample rate |
+
+Example:
+
+```bash
+KOKORO_MODEL_DIR=./kokoro-model \
+KOKORO_VOICES_PATH=./voices-v1.0.bin \
+KOKORO_VOCAB_PATH=./kokoro-model/config.json \
+python -m kokoro_vllm.server
+```
+
+### 4. Call it
+
+```bash
+# Health check
+curl http://localhost:8000/health
+# {"status":"ok"}
+
+# List available voices/languages
+curl http://localhost:8000/v1/audio/voices
+
+# Synthesize (streamed WAV, written straight to a file)
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"input":"Hello world.","voice":"af_sarah","response_format":"wav","stream":true}' \
+  -o output.wav
+```
+
+`voice` also supports blending, e.g. `"af_sarah:70,af_bella:30"`. Set
+`"stream": false` for a single buffered response instead of chunk-by-chunk
+streaming.
+
+### Honest notes on behavior (read before relying on this in production)
+
+- **Deterministic TTS is a deliberate behavior change.** Upstream Kokoro's
+  iSTFTNet decoder injects *unseeded* random noise on every call, so calling
+  it twice with identical inputs produces two different waveforms. This
+  server seeds the RNG (`KOKORO_SYNTHESIS_SEED`, currently a fixed constant
+  in `kokoro_vllm/model/kokoro_vllm_model.py`) immediately before decode, so
+  a given `(text, voice, speed)` request yields **bit-identical audio on
+  every call**. This is intentional and makes the API cacheable/testable,
+  but it is a real, observable difference from vanilla Kokoro — don't expect
+  call-to-call variation.
+
+- **What the GPU parity test actually proves.** `tests/model/test_parity_gpu.py`
+  shows the vLLM engine's output correlates **1.000000** with the reference
+  `kokoro.KModel`. This validates that the port's *plumbing and weight
+  conversion* are correct end-to-end (tokenization → multimodal `ref_s` →
+  forward pass → pooling → waveform). It is **not** two independent
+  implementations agreeing: the vLLM model (`KokoroForConditionalGeneration`)
+  runs the *entire* original `KModel` forward pass inside the vLLM worker —
+  it wraps Kokoro rather than reimplementing its network. That's by design
+  (Approach A: run the whole model on vLLM's pooling runner), and it's why
+  correlation is expected to be exactly 1.0 rather than merely "close."
+
+- **Single request at a time is a current, known limitation.** The engine
+  runs with `max_num_seqs=1`. Concurrent HTTP requests are accepted and
+  processed correctly (streaming and per-request chunk ordering both still
+  work) but are **serialized** by the engine — throughput does not scale
+  with concurrent clients today. The root cause is that the per-request
+  multimodal `ref_s` (the voice embedding) is passed via a `.shared`
+  multimodal field, which collapses to a single value when vLLM batches more
+  than one request into the same forward pass. Lifting this requires
+  upgrading that field from `.shared` to `.batched` multimodal handling — a
+  known follow-up, not yet implemented.
+
+- **`mp3`/`opus` output requires `ffmpeg` on `PATH`.** Without it, requests
+  for those formats fail fast with a `400`; use `response_format: "pcm"` or
+  `"wav"` if `ffmpeg` isn't available.
+
+- **This server is entirely opt-in.** It lives under `kokoro_vllm/`, only
+  activates with the `[vllm]` extra installed, and does not touch or affect
+  the existing `kokoro-tts` ONNX CLI described above.
+
 ## Contributing
 
 This is a personal project. But if you want to contribute, please feel free to submit a Pull Request.
