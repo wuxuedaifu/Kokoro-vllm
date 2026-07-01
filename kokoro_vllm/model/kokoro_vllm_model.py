@@ -82,6 +82,18 @@ from kokoro_vllm.model.mm_processor import (
 from kokoro_vllm.model.pooler import KokoroWaveformPooler
 from kokoro_vllm.model.weights import remap_param_name
 
+# Kokoro's iSTFTNet decoder injects *unseeded* randomness into every synthesis:
+# a random initial phase (`torch.rand`) and Gaussian excitation noise
+# (`torch.randn_like`) in `kokoro.istftnet`'s `SineGen`/source module. This
+# makes KModel.forward_with_tokens non-deterministic run-to-run (~0.99
+# self-correlation on the raw waveform) even with identical weights and inputs.
+# We seed the RNG to a fixed value immediately before synthesis so that a given
+# (phonemes, ref_s, speed) yields reproducible audio, and so the GPU parity gate
+# can compare the vLLM engine output against an identically-seeded reference
+# KModel (see tests/model/test_parity_gpu.py). 0 matches vLLM's default engine
+# seed.
+KOKORO_SYNTHESIS_SEED = 0
+
 
 def _per_request_token_spans(
     input_ids: torch.Tensor, num_requests: int
@@ -208,7 +220,7 @@ class KokoroForConditionalGeneration(
         intermediate_tensors=None,
         inputs_embeds: torch.Tensor | None = None,
         **kwargs: object,
-    ) -> list[torch.Tensor]:
+    ) -> torch.Tensor:
         if input_ids is None:
             raise ValueError(
                 "KokoroForConditionalGeneration.forward requires raw input_ids "
@@ -233,13 +245,29 @@ class KokoroForConditionalGeneration(
 
         spans = _per_request_token_spans(input_ids, num_requests)
 
+        # Make the stochastic decoder deterministic (see KOKORO_SYNTHESIS_SEED).
+        torch.manual_seed(KOKORO_SYNTHESIS_SEED)
+        if device.type == "cuda":
+            torch.cuda.manual_seed_all(KOKORO_SYNTHESIS_SEED)
+
         audios: list[torch.Tensor] = []
         for req_ids, req_ref_s in zip(spans, ref_s):
             ids = req_ids.to(device=device, dtype=torch.long).reshape(1, -1)
             rs = req_ref_s.to(device=device, dtype=torch.float32).reshape(1, REF_S_DIM)
             audio, _pred_dur = self.kmodel.forward_with_tokens(ids, rs, speed)
             audios.append(audio.reshape(-1))
-        return audios
+
+        # Return a 2-D tensor of shape (num_requests, audio_len). Crucially,
+        # dim 0 is the *request* axis, not the audio-sample axis. vLLM's pooling
+        # runner slices the model output as `hidden_states[:num_scheduled_tokens]`
+        # in `_pool` (GPUModelRunner) and reads `hidden_states.shape[0]` during
+        # the pooler warmup (`_dummy_pooler_run_task`). If dim 0 were the audio
+        # length, the `[:num_scheduled_tokens]` slice would truncate the waveform
+        # to the number of phoneme tokens. With dim 0 == num_requests (== 1 under
+        # the guaranteed single-request mode) the slice is a no-op and warmup
+        # sees a well-formed tensor. `KokoroWaveformPooler` then splits this back
+        # into one 1-D waveform per request (row).
+        return torch.stack(audios, dim=0)
 
     @staticmethod
     def _extract_speed(speed) -> float:
@@ -281,5 +309,28 @@ class KokoroForConditionalGeneration(
             with torch.no_grad():
                 target.copy_(weight.to(dtype=target.dtype, device=target.device))
             loaded.add(name)
+
+        # The real kokoro-v1_0.pth checkpoint deliberately omits the affine
+        # parameters of the decoder's AdaIN InstanceNorm1d layers
+        # (`decoder.*.norm.{weight,bias}`). `AdaIN1d` sets `affine=True` only to
+        # work around an old torch.onnx.export bug; those affine params are
+        # never trained and stay at their default identity init (weight=1,
+        # bias=0), with the real per-channel modulation coming from `AdaIN1d.fc`.
+        # The reference `KModel` loads the same checkpoint with strict=False and
+        # therefore also leaves these at 1/0, so parity is preserved. We must
+        # still satisfy vLLM's boot-time coverage check
+        # (default_loader.track_weights_loading raises if any named_parameter is
+        # unloaded), so explicitly reset these to their identity init and mark
+        # them loaded.
+        with torch.no_grad():
+            for name, target in params.items():
+                if name in loaded:
+                    continue
+                if name.endswith(".norm.weight"):
+                    target.fill_(1.0)
+                    loaded.add(name)
+                elif name.endswith(".norm.bias"):
+                    target.fill_(0.0)
+                    loaded.add(name)
 
         return loaded

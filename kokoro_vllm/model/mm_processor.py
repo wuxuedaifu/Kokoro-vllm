@@ -209,6 +209,12 @@ class KokoroMultiModalProcessor(BaseMultiModalProcessor[KokoroProcessingInfo]):
         prompt = inputs.prompt
         if isinstance(prompt, list):
             prompt_token_ids = prompt
+        elif not prompt:
+            # Empty/None prompt: the dummy-profiling path feeds an empty text
+            # (see KokoroDummyInputsBuilder.get_dummy_text). Kokoro is driven by
+            # raw phoneme token ids, so no tokenizer is required (the engine can
+            # run with skip_tokenizer_init=True).
+            prompt_token_ids = []
         else:
             prompt_token_ids = self.info.get_tokenizer().encode(prompt)
 

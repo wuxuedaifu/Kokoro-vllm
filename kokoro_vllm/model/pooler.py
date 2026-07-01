@@ -64,24 +64,26 @@ class KokoroWaveformPooler(Pooler):
         hidden_states: torch.Tensor | list[torch.Tensor],
         pooling_metadata: PoolingMetadata,
     ) -> PoolerOutput:
-        # Expected path: the model forward already split audio per-request
-        # (see module docstring for the model -> pooler contract).
+        # Already-split path: the model forward handed us one tensor per
+        # request directly.
         if isinstance(hidden_states, list):
             return hidden_states
         if isinstance(hidden_states, tuple):
             return list(hidden_states)
 
-        # Fallback: a single flattened tensor was supplied instead. There is
-        # no per-request length field on the real PoolingMetadata to recover
-        # request boundaries from, so this path only works if the caller
-        # passes lengths through some other channel; as a bare Pooler.forward
-        # we have nothing usable to slice by and must fail loudly rather than
-        # invent one.
+        # Expected path (see module docstring + the model's forward): the model
+        # returns a 2-D tensor of shape (num_requests, audio_len) -- dim 0 is
+        # the request axis, so each row is that request's 1-D waveform. Splitting
+        # by row recovers the per-request audio tensors the pooling runner maps
+        # element-wise to PoolingRequestOutputs.
+        if isinstance(hidden_states, torch.Tensor):
+            if hidden_states.dim() == 1:
+                # A single flattened waveform: treat it as one request's audio.
+                return [hidden_states]
+            return [hidden_states[i] for i in range(hidden_states.shape[0])]
+
         raise TypeError(
-            "KokoroWaveformPooler.forward() received a flat "
-            f"{type(hidden_states).__name__}, but no per-request audio "
-            "lengths are available on PoolingMetadata to split it with. "
-            "The model forward must return a list of per-request audio "
-            "tensors; use _slice_per_request(...) directly if you have "
-            "lengths from another source."
+            "KokoroWaveformPooler.forward() received an unsupported "
+            f"{type(hidden_states).__name__}; expected a per-request list or a "
+            "(num_requests, audio_len) tensor from the model forward."
         )
