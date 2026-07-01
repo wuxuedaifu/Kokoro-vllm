@@ -24,8 +24,10 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+import asyncio
+
 from kokoro_vllm.config import ServerSettings
-from kokoro_vllm.frontend.g2p import G2P
+from kokoro_vllm.frontend.g2p import cached_g2p_factory
 from kokoro_vllm.frontend.vocab import load_vocab
 from kokoro_vllm.frontend.voices import load_voicepacks
 from kokoro_vllm.server.app import create_app
@@ -46,11 +48,17 @@ def build_app(settings: ServerSettings | None = None) -> FastAPI:
     engine = KokoroEngine(settings)
     vocab = load_vocab(settings.vocab_path)
     packs = load_voicepacks(settings.voices_path)
+    # One cached factory shared across all requests: each language's misaki
+    # backend (~0.9s to build) is constructed once, not per request.
+    g2p_factory = cached_g2p_factory()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         logger.info("Starting Kokoro engine (model_dir=%s)...", settings.model_dir)
         await engine.start()
+        # Prewarm the default-language G2P backend off the event loop so the
+        # first request doesn't pay the one-time build cost inline.
+        await asyncio.get_running_loop().run_in_executor(None, g2p_factory, "en-us")
         logger.info("Kokoro engine ready.")
         try:
             yield
@@ -58,7 +66,7 @@ def build_app(settings: ServerSettings | None = None) -> FastAPI:
             logger.info("Shutting down Kokoro engine...")
             await engine.close()
 
-    return create_app(engine, lambda lang: G2P(lang), vocab, packs, settings,
+    return create_app(engine, g2p_factory, vocab, packs, settings,
                        lifespan=lifespan)
 
 

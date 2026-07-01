@@ -18,6 +18,28 @@ def _build_backend(lang: str):
     return espeak.EspeakG2P(language=LANG_TO_MISAKI[lang])
 
 
+def cached_g2p_factory():
+    """Return a factory ``f(lang) -> G2P`` that builds each language's backend
+    at most once and reuses it thereafter.
+
+    Constructing a ``G2P`` builds the underlying misaki backend, which is
+    expensive (~0.9s warm, several seconds cold). The server calls the factory
+    once per request, so without caching every request pays that cost. This
+    memoizes per language so the build happens only on the first request for
+    each language.
+    """
+    cache: dict[str, "G2P"] = {}
+
+    def factory(lang: str = "en-us") -> "G2P":
+        g = cache.get(lang)
+        if g is None:
+            g = G2P(lang)
+            cache[lang] = g
+        return g
+
+    return factory
+
+
 class G2P:
     def __init__(self, lang: str = "en-us"):
         if lang not in LANG_TO_MISAKI:
