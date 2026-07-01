@@ -44,8 +44,17 @@ def chunk_text(text, g2p, vocab, max_tokens=510):
         for word in sentence.split():
             wphon = g2p.phonemize(word)
             if _token_len(wphon, vocab) > max_tokens:
+                # Flush whatever we've accumulated so far first.
+                c = _emit(g2p.phonemize(buf), vocab)
+                if c:
+                    chunks.append(c)
+                buf = ""
                 logger.warning("Word exceeds max_tokens; hard-truncating: %r", word)
-                wphon = "".join(p for p in wphon if p in vocab)[:max_tokens]
+                truncated = "".join(p for p in wphon if p in vocab)[:max_tokens]
+                c = _emit(truncated, vocab)
+                if c:
+                    chunks.append(c)
+                continue
             candidate = (buf + " " + word).strip()
             cphon = g2p.phonemize(candidate)
             if _token_len(cphon, vocab) > max_tokens:

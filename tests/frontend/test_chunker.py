@@ -23,3 +23,16 @@ def test_respects_max_tokens():
 def test_never_empty_chunks():
     chunks = chunk_text("a.  . b.", FakeG2P(), VOCAB, max_tokens=510)
     assert all(len(c.input_ids) > 2 for c in chunks)   # more than just padding
+
+def test_hard_truncates_overlong_word(caplog):
+    # A single word whose phoneme length exceeds max_tokens must never be
+    # emitted as-is; it must be hard-truncated into its own chunk that
+    # respects the max_tokens + 2 padding budget, and must not be dropped.
+    overlong_word = "a" * 30
+    text = overlong_word + "."
+    with caplog.at_level("WARNING"):
+        chunks = chunk_text(text, FakeG2P(), VOCAB, max_tokens=10)
+    assert len(chunks) >= 1
+    for c in chunks:
+        assert len(c.input_ids) <= 10 + 2
+    assert any("exceeds max_tokens" in r.message for r in caplog.records)
