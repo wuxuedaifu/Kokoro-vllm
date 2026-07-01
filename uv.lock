@@ -1625,8 +1625,8 @@ wheels = [
 ]
 
 [[package]]
-name = "kokoro-tts"
-version = "2.3.1"
+name = "kokoro-vllm"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
