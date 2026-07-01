@@ -56,3 +56,17 @@ def test_speech_bad_voice_400():
 def test_speech_empty_input_422():
     r = _client().post("/v1/audio/speech", json={"input": ""})
     assert r.status_code == 422    # schema validation
+
+
+def test_speech_mp3_without_ffmpeg_400(monkeypatch):
+    monkeypatch.setattr("kokoro_vllm.server.streaming._have_ffmpeg", lambda: False)
+
+    r = _client().post("/v1/audio/speech",
+                       json={"input": "ab. cd.", "voice": "af_sarah",
+                             "response_format": "mp3", "stream": True})
+    assert r.status_code == 400
+
+    r = _client().post("/v1/audio/speech",
+                       json={"input": "ab. cd.", "voice": "af_sarah",
+                             "response_format": "mp3", "stream": False})
+    assert r.status_code == 400

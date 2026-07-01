@@ -6,9 +6,8 @@ from kokoro_vllm.frontend.chunker import chunk_text
 from kokoro_vllm.frontend.voices import list_voices, parse_voice_spec
 from kokoro_vllm.frontend.g2p import LANG_TO_MISAKI
 from kokoro_vllm.server.schemas import SpeechRequest, VoicesResponse
-from kokoro_vllm.server.streaming import (
-    encode_audio, stream_synthesis, AudioEncodeError,
-)
+from kokoro_vllm.server import streaming
+from kokoro_vllm.server.streaming import stream_synthesis, AudioEncodeError
 
 _MEDIA = {"pcm": "audio/pcm", "wav": "audio/wav",
           "mp3": "audio/mpeg", "opus": "audio/opus"}
@@ -41,6 +40,12 @@ def create_app(engine, g2p_factory, vocab, packs, settings) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         if not chunks:
             raise HTTPException(status_code=400, detail="no synthesizable text")
+
+        if req.response_format in ("mp3", "opus") and not streaming._have_ffmpeg():
+            raise HTTPException(
+                status_code=400,
+                detail=f"{req.response_format} requires ffmpeg; install ffmpeg or use pcm/wav",
+            )
 
         media = _MEDIA[req.response_format]
         agen = stream_synthesis(engine, chunks, packs, req.voice, req.speed,
