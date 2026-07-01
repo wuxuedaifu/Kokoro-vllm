@@ -1,0 +1,87 @@
+"""Waveform pooler for Kokoro.
+
+Kokoro's model forward (Task 11) produces raw audio, not an embedding or a
+classification score, so this pooler declares the vLLM 0.24.0 ``"plugin"``
+pooling task (see ``vllm.pooling_params.PoolingParams.verify`` — the
+"plugin" task skips the normal embed/classify parameter validation and is
+the documented escape hatch for pooling outputs of this shape, e.g.
+``vllm.model_executor.layers.pooler.special.IdentityPooler``).
+
+Model -> pooler contract (Task 11 must match this):
+    ``KokoroForConditionalGeneration.forward`` returns a **list of
+    per-request ``torch.Tensor`` waveforms** (one 1-D audio tensor per
+    request in the batch), not a single concatenated tensor. This pooler's
+    ``forward`` then returns that list unchanged (identity passthrough) —
+    a `list[torch.Tensor]` is a legal ``Pooler.forward`` return type per
+    the real base-class signature (`torch.Tensor | list[torch.Tensor] |
+    list[torch.Tensor | None]`).
+
+    ``_slice_per_request`` is kept as a pure, independently-testable helper
+    for a fallback path: if audio ever arrives as a single flattened
+    tensor plus explicit per-request lengths, it splits that tensor back
+    into per-request pieces. Note that vLLM's real ``PoolingMetadata``
+    (``vllm.v1.pool.metadata.PoolingMetadata``) has no ``audio_lengths``
+    field — nothing on it identifies how many audio samples belong to each
+    request, only token-level info like ``prompt_lens``. So this fallback
+    path requires the *caller* (i.e. the model) to supply lengths obtained
+    from its own bookkeeping; there is no field to pull them from off
+    ``pooling_metadata`` in the base pooling contract.
+"""
+
+from collections.abc import Set
+
+import torch
+
+from vllm.model_executor.layers.pooler import Pooler
+from vllm.tasks import PoolingTask
+from vllm.v1.outputs import PoolerOutput
+from vllm.v1.pool.metadata import PoolingMetadata
+
+
+def _slice_per_request(flat_audio: torch.Tensor, seq_lengths: list[int]) -> list[torch.Tensor]:
+    """Split a concatenated 1-D audio tensor into per-request tensors."""
+    out: list[torch.Tensor] = []
+    start = 0
+    for n in seq_lengths:
+        out.append(flat_audio[start : start + n])
+        start += n
+    return out
+
+
+class KokoroWaveformPooler(Pooler):
+    """Passes each request's synthesized waveform through as its pooled output.
+
+    No normalization or reduction is applied — Kokoro's decoder output *is*
+    the desired result, unlike an embedding pooler that reduces hidden
+    states to a fixed-size vector.
+    """
+
+    def get_supported_tasks(self) -> Set[PoolingTask]:
+        return {"plugin"}
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor | list[torch.Tensor],
+        pooling_metadata: PoolingMetadata,
+    ) -> PoolerOutput:
+        # Expected path: the model forward already split audio per-request
+        # (see module docstring for the model -> pooler contract).
+        if isinstance(hidden_states, list):
+            return hidden_states
+        if isinstance(hidden_states, tuple):
+            return list(hidden_states)
+
+        # Fallback: a single flattened tensor was supplied instead. There is
+        # no per-request length field on the real PoolingMetadata to recover
+        # request boundaries from, so this path only works if the caller
+        # passes lengths through some other channel; as a bare Pooler.forward
+        # we have nothing usable to slice by and must fail loudly rather than
+        # invent one.
+        raise TypeError(
+            "KokoroWaveformPooler.forward() received a flat "
+            f"{type(hidden_states).__name__}, but no per-request audio "
+            "lengths are available on PoolingMetadata to split it with. "
+            "The model forward must return a list of per-request audio "
+            "tensors; use _slice_per_request(...) directly if you have "
+            "lengths from another source."
+        )
