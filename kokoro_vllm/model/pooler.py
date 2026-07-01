@@ -7,14 +7,18 @@ pooling task (see ``vllm.pooling_params.PoolingParams.verify`` — the
 the documented escape hatch for pooling outputs of this shape, e.g.
 ``vllm.model_executor.layers.pooler.special.IdentityPooler``).
 
-Model -> pooler contract (Task 11 must match this):
-    ``KokoroForConditionalGeneration.forward`` returns a **list of
-    per-request ``torch.Tensor`` waveforms** (one 1-D audio tensor per
-    request in the batch), not a single concatenated tensor. This pooler's
-    ``forward`` then returns that list unchanged (identity passthrough) —
-    a `list[torch.Tensor]` is a legal ``Pooler.forward`` return type per
-    the real base-class signature (`torch.Tensor | list[torch.Tensor] |
-    list[torch.Tensor | None]`).
+Model -> pooler contract (Task 11 / Task 12):
+    ``KokoroForConditionalGeneration.forward`` returns a **2-D
+    ``torch.Tensor`` of shape ``(num_requests, audio_len)``** — the request
+    axis MUST be dim 0, because vLLM's ``_pool`` slices the model output as
+    ``hidden_states[:num_scheduled_tokens]`` and a flat 1-D waveform would
+    be truncated to the token count. This pooler ``forward`` splits that
+    tensor back into one ``torch.Tensor`` per request (one row each). A
+    ``list[torch.Tensor]`` input is also accepted (identity passthrough);
+    both are legal ``Pooler.forward`` return types per the real base-class
+    signature (`torch.Tensor | list[torch.Tensor] | list[torch.Tensor |
+    None]`). (Single-request batches only for now — see Task 11 notes on
+    the ``.shared`` mm-kwargs batching limitation.)
 
     ``_slice_per_request`` is kept as a pure, independently-testable helper
     for a fallback path: if audio ever arrives as a single flattened
